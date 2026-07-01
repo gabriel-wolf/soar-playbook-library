@@ -2,8 +2,11 @@
 
 An enterprise-grade, production-ready Azure Logic App playbook designed to trigger automatically from Microsoft Sentinel incidents. This workflow provides rapid, automated isolation of compromised accounts while implementing strict guardrails around Executive/VIP identities and operational business hours.
 
-## Analyst Notification Output
-When the playbook triggers, for example, on a high-severity `Risky Logon Detected - TOR involving one user` alert, the SOC and relevant IT help desks instantly receive a highly detailed, formatted incident notification detailing the exact automated triage state:
+## Notification Output & ServiceNow Ticketing Ingestion
+When the playbook triggers, for example, on a high-severity `Risky Logon Detected - TOR involving one user` alert, the workflow dispatches targeted notification payloads:
+
+1. **SOC & Help Desk Triage:** Instantly delivers a highly detailed, formatted incident email outlining the exact automated response state.
+2. **Automated ServiceNow Ticketing:** For standard users, a secondary, structured notification payload is dispatched to the corporate IT Service Management (ITSM) queue. This email is formatted specifically for automated ingestion, instantly creating a Security Incident Response (SIR) ticket in **ServiceNow** to track help desk remediation and account recovery.
 
 ![SOC Email Notification](../imgs/soc-email-notification.png)
 
@@ -14,7 +17,7 @@ When the playbook triggers, for example, on a high-severity `Risky Logon Detecte
    - Evaluates if the current local timestamp falls within core operational business hours (8:00 AM - 8:00 PM CST).
    - Scans the user's `jobTitle` for executive keywords (`Chancellor`, `Provost`, `President`, `CIO`, `CFO`, `CMO`, `COO`) to determine **VIP Status**.
 4. **Conditional Execution:**
-   - **Standard Users:** Account is automatically disabled via a custom identity API patch request, password pre-expired, and a Security Incident Response (SIR) ticket is generated and handled in the ITSM platform.
+   - **Standard Users:** Account is automatically disabled via a custom identity API patch request, password pre-expired, and a structured payload is generated to trigger the ServiceNow ticketing flow.
    - **VIP Users:** Bypasses automatic lockout to prevent critical operational downtime. The workflow instead escalates the alert directly to Tier 3 SOC leadership and the Executive Recovery Team for white-glove, hands-on remediation.
 5. **Testing Guardrails:** Built-in condition checks for `DisableInProduction` and `SendProductionEmail` parameters to support safe testing and staging simulations.
 
