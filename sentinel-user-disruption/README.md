@@ -6,9 +6,10 @@ An enterprise-grade, production-ready Azure Logic App playbook designed to trigg
 When the playbook triggers, for example, on a high-severity `Risky Logon Detected - TOR involving one user` alert, the workflow dispatches targeted notification payloads:
 
 1. **SOC & Help Desk Triage:** Instantly delivers a highly detailed, formatted incident email outlining the exact automated response state.
-2. **Automated ServiceNow Ticketing:** For standard users, a secondary, structured notification payload is dispatched to the corporate IT Service Management (ITSM) queue. This email is formatted specifically for automated ingestion, instantly creating a Security Incident Response (SIR) ticket in **ServiceNow** to track help desk remediation and account recovery.
 
 ![SOC Email Notification](../imgs/soc-email-notification.png)
+
+2. **Automated ServiceNow Ticketing:** For standard users, a secondary, structured notification payload is dispatched to the corporate IT Service Management (ITSM) queue. This email is formatted specifically for automated ingestion, instantly creating a Security Incident Response (SIR) ticket in **ServiceNow** to track help desk remediation and account recovery.
 
 ## Workflow Logic Architecture
 1. **Trigger:** Activated via Microsoft Sentinel Webhook upon incident generation.
