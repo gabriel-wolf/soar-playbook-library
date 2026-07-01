@@ -24,7 +24,7 @@ This repository is structured as a monorepo, where each subfolder represents a s
   * Automated **VIP/Executive Identity protection bypass loops** targeting high-profile roles (Chancellors, Presidents, C-Suite) to mitigate critical business downtime risks.
   * Native ITSM ticketing integration for rapid service-desk handoffs.
 
-### 2. [AI-Driven Autonomous Host Isolation](./sentinel-autonomous-host-isolation/)
+### 2. [Autonomous Host Isolation](./sentinel-autonomous-host-isolation/)
 * **Primary Function:** Automated endpoint containment utilizing the Microsoft Defender for Endpoint (MDE) API.
 * **Key Features:**
   * Integrated **Azure OpenAI (`gpt-4o-mini`) agent** block running zero-shot synthesis to generate unformatted, 1-2 line natural language briefs for SOC analysts.
