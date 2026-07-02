@@ -11,7 +11,7 @@ These workflows are engineered to bridge the gap between high-fidelity threat de
 This repository is structured as a monorepo, where each subfolder represents a standalone, parameterizable automation module complete with its own dedicated technical blueprint and architecture breakdown.
 
 * **imgs/** — Global assets & analyst artifact verification
-* **sentinel-autonomous-host-isolation/** — MDE-driven endpoint isolation with OpenAI analysis
+* **sentinel-device-isolation/** — MDE-driven endpoint isolation with OpenAI analysis
 * **sentinel-user-disruption/** — Context-aware user containment & VIP bypass logic
 
 ---
