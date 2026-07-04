@@ -515,13 +515,13 @@
                                         {
                                             "contains": [
                                                 "@items('For_Each_Account')['Alert']",
-                                                "Critical DISRUPTION Trigger"
+                                                "This Alert Title should Disable a VIP"
                                             ]
                                         },
                                         {
                                             "contains": [
                                                 "@triggerBody()?['object']?['properties']?['title']",
-                                                "attack disruption"
+                                                "This Alert Title should Disable a VIP"
                                             ]
                                         },
                                         {
