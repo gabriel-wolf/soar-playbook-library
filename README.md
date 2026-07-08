@@ -21,8 +21,8 @@ This repository is structured as a monorepo, where each subfolder represents a s
 ### 1. [Autonomous Device Isolation](./sentinel-device-isolation/)
 * **Primary Function:** Automated endpoint containment utilizing the Microsoft Defender for Endpoint (MDE) API.
 * **Key Features:**
-  * Integrated **Azure OpenAI (`gpt-4o-mini`) agent** block running zero-shot synthesis to generate unformatted, 1-2 line natural language briefs for SOC analysts.
-  * Pre-containment state evaluation checking for pre-existing system blocking mechanisms (`Prevented Control`) to reduce unnecessary disruptions.
+  * Integrated **Azure OpenAI (`gpt-4o-mini`) agent** block generating briefs for SOC analysts.
+  * Pre-containment state evaluation checking to prevent unnecessary disruptions.
   * Automatic system classification loops separating standard workstations from mission-critical servers (`Server` / `Linux`).
   * An asynchronous verification engine (`Until` loop) polling the MDE machine actions API every 60 seconds to guarantee confirmation of isolation on the wire.
 
@@ -130,7 +130,7 @@ flowchart TD
 ### 2. [Autonomous User Containment](./sentinel-user-disruption/)
 * **Primary Function:** Automated user profile lookup via Microsoft Graph and identity containment via a custom corporate Identity API.
 * **Key Features:**
-  * Dynamic active-hours logic parsing (8:00 AM – 8:00 PM CST evaluations).
+  * Dynamic active-hours logic parsing (for SOC on-call).
   * Automated **VIP/Executive Identity protection bypass loops** targeting high-profile roles (Chancellors, Presidents, C-Suite) to mitigate critical business downtime risks.
   * Native ITSM ticketing integration for rapid service-desk handoffs.
 
