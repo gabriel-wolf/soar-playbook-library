@@ -2,23 +2,12 @@
 
 A collection of production-grade, context-aware Security Orchestration, Automation, and Response (SOAR) playbooks built using Azure Logic Apps and integrated with Microsoft Sentinel and Microsoft Defender for Endpoint (MDE). 
 
-> [!NOTE]
+> [!IMPORTANT]
 > These are production-grade playbooks I created (and sanitized). They are actively utilized by a large-scale enterprise with over 100,000 users and endpoints. Because they were engineered for a specific organization, they will need to be modified to meet your company's specific business attributes.
----
-
-## Repository Architecture
-
-This repository is structured as a monorepo, where each subfolder represents a standalone, parameterizable automation module complete with its own dedicated technical blueprint and architecture breakdown.
-
-* **imgs/** — Global assets & analyst artifact verification
-* **sentinel-device-isolation/** — MDE-driven endpoint isolation with OpenAI analysis
-* **sentinel-user-disruption/** — Context-aware user containment & VIP bypass logic
 
 ---
 
-## Library Directory
-
-### 1. [Autonomous Device Isolation](./sentinel-device-isolation/)
+# 1. [Autonomous Device Isolation](./sentinel-device-isolation/)
 * **Primary Function:** Automated endpoint containment utilizing the Microsoft Defender for Endpoint (MDE) API.
 * **Key Features:**
   * Integrated **Azure OpenAI (`gpt-4o-mini`) agent** block generating briefs for SOC analysts.
@@ -27,6 +16,7 @@ This repository is structured as a monorepo, where each subfolder represents a s
   * An asynchronous verification engine (`Until` loop) polling the MDE machine actions API every 60 seconds to guarantee confirmation of isolation on the wire.
 
 
+## Simplified Logic App Flowchart
 
 ```mermaid
 flowchart TD
@@ -127,12 +117,15 @@ flowchart TD
     IsolateSuccessful -->|No| IsolationFailed[Log Failure Details to Audit History]
    ```
 
-### 2. [Autonomous User Containment](./sentinel-user-disruption/)
+# 2. [Autonomous User Containment](./sentinel-user-disruption/)
 * **Primary Function:** Automated user profile lookup via Microsoft Graph and identity containment via a custom corporate Identity API.
 * **Key Features:**
   * Dynamic active-hours logic parsing (for SOC on-call).
   * Automated **VIP/Executive Identity protection bypass loops** targeting high-profile roles (Chancellors, Presidents, C-Suite) to mitigate critical business downtime risks.
   * Native ITSM ticketing integration for rapid service-desk handoffs.
+
+## Simplified Logic App Flowchart
+
 
 ```mermaid
 flowchart TD
