@@ -31,6 +31,7 @@ When the playbook runs, it generates SOC-facing notifications that include:
 - [`deploy/automation-rules/sentinel-on-update.json`](deploy/automation-rules/sentinel-on-update.json) fires on incident update when new alerts are added and the title matches configured trigger keywords.
 
 
+![Designer View](../imgs/device-isolation-designer-view.png)
 
 ### Alert Processing
 
