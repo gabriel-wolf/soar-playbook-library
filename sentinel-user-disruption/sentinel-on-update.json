@@ -1,0 +1,88 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspaceName": {
+            "type": "String",
+            "metadata": {
+                "description": "The Microsoft Sentinel Log Analytics workspace name."
+            }
+        },
+        "subscriptionId": {
+            "type": "String",
+            "defaultValue": "[subscription().subscriptionId]",
+            "metadata": {
+                "description": "The Azure Subscription ID where the Logic App/Playbook lives."
+            }
+        },
+        "resourceGroupName": {
+            "type": "String",
+            "metadata": {
+                "description": "The name of the Resource Group containing the target Logic App workflow."
+            }
+        },
+        "logicAppName": {
+            "type": "String",
+            "defaultValue": "AutoContain-Playbook",
+            "metadata": {
+                "description": "The name of the target Logic App workflow."
+            }
+        },
+        "highFidelityIncidentKeywords": {
+            "type": "Array",
+            "defaultValue": [
+                "Generic High-Risk Condition Alpha",
+                "Generic High-Risk Condition Beta",
+                "Suspicious Credential Activity Example",
+                "Potential Attacker Infrastructure Detection Pattern"
+            ],
+            "metadata": {
+                "description": "High-fidelity incident titles that will trigger containment when an alert is added to an updated incident."
+            }
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspaceName'), 'Microsoft.SecurityInsights'),'/AutomationRules/8b5d94c5-d3b3-48c5-98df-43b9d637acc9')]",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/8b5d94c5-d3b3-48c5-98df-43b9d637acc9')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/AutomationRules",
+            "apiVersion": "2024-04-01-preview",
+            "properties": {
+                "displayName": "SOC-AutoContain (on update)",
+                "order": 1,
+                "triggeringLogic": {
+                    "isEnabled": true,
+                    "triggersOn": "Incidents",
+                    "triggersWhen": "Updated",
+                    "conditions": [
+                        {
+                            "conditionType": "PropertyArrayChanged",
+                            "conditionProperties": {
+                                "arrayType": "Alerts",
+                                "changeType": "Added"
+                            }
+                        },
+                        {
+                            "conditionType": "Property",
+                            "conditionProperties": {
+                                "propertyName": "IncidentTitle",
+                                "operator": "Contains",
+                                "propertyValues": "[parameters('highFidelityIncidentKeywords')]"
+                            }
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "order": 1,
+                        "actionType": "RunPlaybook",
+                        "actionConfiguration": {
+                            "logicAppResourceId": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Logic/workflows/', parameters('logicAppName'))]",
+                            "tenantId": "[subscription().tenantId]"
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
