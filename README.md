@@ -20,7 +20,7 @@ This repository is structured as a monorepo, where each subfolder represents a s
 
 ### 1. [Context-Aware User Disruption](./sentinel-user-disruption/)
 * **Primary Function:** Automated identity containment and session revocation via the Microsoft Graph API.
-  * **Key Features:** 
+* **Key Features:** 
   * Dynamic active-hours logic parsing (8:00 AM – 8:00 PM CST evaluations).
   * Automated **VIP/Executive Identity protection bypass loops** targeting high-profile roles (Chancellors, Presidents, C-Suite) to mitigate critical business downtime risks.
   * Native ITSM ticketing integration for rapid service-desk handoffs.
