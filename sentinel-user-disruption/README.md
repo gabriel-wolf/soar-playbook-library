@@ -1,4 +1,4 @@
-# Automated Incident Response: Context-Aware User Containment
+# Automated Incident Response: User Containment
 
 An enterprise-grade Azure Logic App playbook that automatically responds to high-fidelity Sentinel incidents by disabling at-risk user accounts, generating ITSM tickets, and routing urgent executive notifications for VIP accounts.
 
