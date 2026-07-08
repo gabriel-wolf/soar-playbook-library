@@ -75,9 +75,9 @@ The workflow uses Managed Service Identity to authenticate to Microsoft Graph fo
 
 ## Deployment Files
 
-- [deploy/logic-app/workflow.json](deploy/logic-app/workflow.json)
-- [deploy/automation-rules/sentinel-on-creation.json](deploy/automation-rules/sentinel-on-creation.json)
-- [deploy/automation-rules/sentinel-on-update.json](deploy/automation-rules/sentinel-on-update.json)
+- [`deploy/logic-app/workflow.json`](deploy/logic-app/workflow.json)
+- [`deploy/automation-rules/sentinel-on-creation.json`](deploy/automation-rules/sentinel-on-creation.json)
+- [`deploy/automation-rules/sentinel-on-update.json`](deploy/automation-rules/sentinel-on-update.json)
 
 ## Deployment Parameters
 
