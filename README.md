@@ -47,7 +47,7 @@ Every blueprint in this framework is designed under the following engineering pr
 
 ## Getting Started & Validation
 
-Before deploying any templates to a live production tenant, you can discover your environment configurations and run pre-flight local syntax validation checks using our [Azure Deployment & Validation Helper Guide](./helper-files.md).
+Before deploying any templates to a live production tenant, you can discover your environment configurations and run pre-flight local syntax validation checks using our [Azure Deployment & Validation Helper Guide](./helper-commands.md).
 
 ---
 
