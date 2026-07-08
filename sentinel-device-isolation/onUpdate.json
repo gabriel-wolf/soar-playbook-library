@@ -1,0 +1,67 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/AutomationRules/00000000-0000-0000-0000-000000000000')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/00000000-0000-0000-0000-000000000000')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/AutomationRules",
+            "apiVersion": "2024-04-01-preview",
+            "properties": {
+                "displayName": "COMPANY-AutoIsolate (on update)",
+                "order": 2,
+                "triggeringLogic": {
+                    "isEnabled": true,
+                    "triggersOn": "Incidents",
+                    "triggersWhen": "Updated",
+                    "conditions": [
+                        {
+                            "conditionType": "Property",
+                            "conditionProperties": {
+                                "propertyName": "IncidentTitle",
+                                "operator": "Contains",
+                                "propertyValues": [
+                                    "Generic Threat Condition Alpha",
+                                    "Generic Threat Condition Beta",
+                                    "Generic Threat Condition Gamma"
+                                ]
+                            }
+                        },
+                        {
+                            "conditionType": "PropertyArrayChanged",
+                            "conditionProperties": {
+                                "arrayType": "Alerts",
+                                "changeType": "Added"
+                            }
+                        },
+                        {
+                            "conditionType": "Property",
+                            "conditionProperties": {
+                                "propertyName": "IncidentSeverity",
+                                "operator": "NotEquals",
+                                "propertyValues": [
+                                    "Informational"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "actions": [
+                    {
+                        "order": 1,
+                        "actionType": "RunPlaybook",
+                        "actionConfiguration": {
+                            "logicAppResourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/COMPANY-Sentinel-REGION-RG-01/providers/Microsoft.Logic/workflows/COMPANY-AutoIsolate",
+                            "tenantId": "00000000-0000-0000-0000-000000000000"
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
