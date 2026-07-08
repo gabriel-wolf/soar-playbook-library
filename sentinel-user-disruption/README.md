@@ -21,6 +21,7 @@ An enterprise-grade Azure Logic App playbook that automatically responds to high
 - [`deploy/automation-rules/sentinel-on-update.json`](deploy/automation-rules/sentinel-on-update.json) fires on incident update when new alerts are added and the title matches one of the configured keywords.
 
 ### Simplified Logic App Flowchart
+- [`deploy/logic-app/workflow.json`](deploy/logic-app/workflow.json) the full Logic App workflow for importing.
 
 ```mermaid
 flowchart TD
