@@ -152,22 +152,17 @@ flowchart TD
 
         Normalize --> SingleUser{Only One User Found?}
 
-        SingleUser -->|Yes| DirectMatch[Use Identified User]
+        SingleUser -->|Yes| SelectUser[Select Matching User]
+        SingleUser -->|No| SearchAlerts[Query Sentinel Alerts]
 
-        SingleUser -->|No| QueryAlerts[Search Related Alerts]
+        SearchAlerts --> AlertReady{Matching Alerts Found?}
+        AlertReady -->|No| Delay[Wait 30 Seconds]
+        Delay --> SearchAlerts
 
-        subgraph WaitLoop [🔄 Do Until: Alert Data Available]
-            direction TB
-            SearchAlerts[Query Sentinel Alerts]
-            SearchAlerts --> AlertReady{Matching Alerts Found?}
-            AlertReady -->|No| Delay[Wait 30 Seconds]
-            Delay --> SearchAlerts
-        end
-
-        WaitLoop --> Correlate[Correlate Accounts to Alert Titles]
+        AlertReady -->|Yes| Correlate[Correlate Accounts to Alert Titles]
         Correlate --> MatchFound{Unique Match Identified?}
 
-        MatchFound -->|Yes| SelectUser[Select Matching User]
+        MatchFound -->|Yes| SelectUser
         MatchFound -->|No| CompareIncident[Compare Incident Alert Metadata]
         CompareIncident --> SelectUser
     end
@@ -197,6 +192,7 @@ flowchart TD
 
     EmailMode -->|Yes| ITSM[Create ITSM Recovery Ticket]
     ITSM --> VIPRoute{VIP User?}
+
     VIPRoute -->|Yes| ExecEmail[Notify Executive Recovery Team]
     VIPRoute -->|No| SOCEmail[Notify SOC]
 
