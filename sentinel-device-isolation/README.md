@@ -27,8 +27,10 @@ When the playbook runs, it generates SOC-facing notifications that include:
 
 ### Trigger
 
-- `deploy/automation-rules/sentinel-on-creation.json` fires on incident creation when the title matches configured trigger keywords.
-- `deploy/automation-rules/sentinel-on-update.json` fires on incident update when new alerts are added and the title matches configured trigger keywords.
+- [`deploy/automation-rules/sentinel-on-creation.json`](deploy/automation-rules/sentinel-on-creation.json) fires on incident creation when the title matches configured trigger keywords.
+- [`deploy/automation-rules/sentinel-on-update.json`](deploy/automation-rules/sentinel-on-update.json) fires on incident update when new alerts are added and the title matches configured trigger keywords.
+
+
 
 ### Alert Processing
 
@@ -71,10 +73,9 @@ When the playbook runs, it generates SOC-facing notifications that include:
 
 ## Deployment Files
 
-- `deploy/logic-app/workflow.json`
-- `deploy/automation-rules/sentinel-on-creation.json`
-- `deploy/automation-rules/sentinel-on-update.json`
-
+- [`deploy/logic-app/workflow.json`](deploy/logic-app/workflow.json)
+- [`deploy/automation-rules/sentinel-on-creation.json`](deploy/automation-rules/sentinel-on-creation.json)
+- [`deploy/automation-rules/sentinel-on-update.json`](deploy/automation-rules/sentinel-on-update.json)
 ## Deployment Parameters
 
 ### Logic App ARM Template Parameters
