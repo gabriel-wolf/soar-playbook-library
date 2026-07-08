@@ -10,6 +10,7 @@ When an endpoint containment event triggers, the SOC receives a priority notific
 - An AI-generated 1-2 line summary of the malicious behavior from the pre-isolation perspective
 - Direct link to the Microsoft Sentinel incident for additional context
 
+
 ![SOC Device Email Notification](../imgs/soc-device-email-notification.png)
 
 ## Workflow Architecture

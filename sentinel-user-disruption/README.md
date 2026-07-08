@@ -21,6 +21,9 @@ This playbook produces:
 - A VIP escalation email to `executiveEmailRecipients` when the target account matches the VIP criteria.
 - A separate test-mode email path when runtime production guards are disabled.
 
+![SOC Email Notification](../imgs/soc-email-notification.png)
+
+
 ## Workflow Architecture
 
 ### Trigger
