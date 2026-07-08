@@ -30,33 +30,107 @@ When the playbook runs, it generates SOC-facing notifications that include:
 - [`deploy/automation-rules/sentinel-on-creation.json`](deploy/automation-rules/sentinel-on-creation.json) fires on incident creation when the title matches configured trigger keywords.
 - [`deploy/automation-rules/sentinel-on-update.json`](deploy/automation-rules/sentinel-on-update.json) fires on incident update when new alerts are added and the title matches configured trigger keywords.
 
+### Logic App Design
 
-![Designer View](../imgs/device-isolation-designer-view.png)
+```mermaid
+flowchart TD
+    %% Triggers & Initialization
+    Trigger([Sentinel Incident Created]) --> GetIncident[Get Incident Details]
+    GetIncident --> InitVars[Initialize Variables]
+    InitVars --> GetSecret[Get API Authentication Credentials]
 
-### Alert Processing
+    %% Alert Processing Loop
+    GetSecret --> ForEachAlertBlock
+    
+    subgraph ForEachAlertBlock [🔁 For Each Alert in Incident]
+        direction TB
+        GetAlertDetails[Get Security Alert Details] --> FilterRemediation{Is Alert<br>Still Active?}
+        FilterRemediation -->|Yes| AppendLists[Add to Active Alerts List]
+        FilterRemediation -->|No| SkipAlert[Skip Alert]
+    end
 
-- The workflow iterates through incident alerts in `For_Each_Alert`.
-- It queries Microsoft Graph Security API to retrieve alert evidence.
-- Active file evidence is filtered and active device entities are collected.
+    %% Control Gates
+    ForEachAlertBlock --> ClosedControl{Is Incident Already Closed?}
+    ClosedControl -->|Yes| TerminateClosed([❌ Terminate Playbook])
+    
+    ClosedControl -->|No| PreventedControl{Was Attack Automatically Blocked?}
+    PreventedControl -->|Yes| TerminatePrevented([❌ Terminate Playbook])
 
-### AI Summary Generation
+    %% Data Preparation
+    PreventedControl -->|No| ComposeIncidentURL[Generate Portal Links]
+    ComposeIncidentURL --> ComposeAlerts[Compile Alert Data]
+    ComposeAlerts --> SummaryAgent[Generate AI Summary of Incident]
 
-- `Summary_Agent` calls Azure OpenAI (`gpt-4o-mini`) to summarize alert and device evidence.
-- It returns a 1-2 line pre-isolation summary that includes the device name.
+    %% Host Isolation Loop
+    SummaryAgent --> ForEachHostBlock
 
-### Host Isolation
+    subgraph ForEachHostBlock [🔁 For Each Unique Host]
+        direction TB
+        CheckHours[Check if Outside Business Hours] --> SetIDs[Identify Target Machine]
+        SetIDs --> GetMachine[Get Device Details]
+        GetMachine --> CheckOS{Check OS Type}
+        
+        CheckOS -->|Server / Linux| SetServerTrue[Mark as Server]
+        CheckOS -->|Workstation| SetServerFalse[Mark as Workstation]
+        
+        SetServerTrue & SetServerFalse --> IsolationLogic{Should Device Be Isolated?}
+        
+        %% Isolation Actions
+        IsolationLogic -->|Yes| IsolateMachine[Trigger Network Isolation]
+        IsolateMachine --> TagIncident[Add 'AUTOCONTAIN' Tag to Incident]
+        
+        %% Do-Until Loop Structure
+        TagIncident --> DoUntilBlock
+        
+        subgraph DoUntilBlock [🔄 Do Until: Isolation Status Confirmed]
+            direction TB
+            Delay5[Wait 5 Seconds] --> GetIsolateStatus[Check Isolation Progress]
+            GetIsolateStatus --> EvalCondition{Is Device Isolated<br>OR 1 Hour Timeout?}
+            EvalCondition -->|No| Delay5
+        end
+        
+        %% Simulation / Fallback Path
+        IsolationLogic -->|No| TestBoxFallback[Route to Test Sandbox Group]
+    end
 
-- The workflow iterates through active hosts in `For_Each_Host`.
-- It evaluates whether the current time is after-hours using Central Standard Time (`8:00 AM` to `8:00 PM` CST).
-- It determines server versus workstation status and applies appropriate isolation logic.
-- It uses guardrails to avoid aggressive isolation on critical or after-hours systems.
+    %% Nested Notification Branching Tree
+    ForEachHostBlock --> Gate1{"Is Isolation Feature Disabled?"}
+    
+    %% Condition 1: True
+    Gate1 -->|True| SetVars1[Draft Notification:<br>Feature Disabled]
+    SetVars1 --> SetToCc1[Route to On-Call Analyst]
+    
+    %% Condition 1: False -> Leads to Gate 2
+    Gate1 -->|False| Gate2{"Is Critical Server at Risk?"}
+    
+    %% Condition 2: True
+    Gate2 -->|True| SetVars2[Draft Alert:<br>Server at Risk]
+    SetVars2 --> SetToCc2[Route to Emergency SOC Team]
+    
+    %% Condition 2: False -> Leads to Gate 3
+    Gate2 -->|False| Gate3{"Was a Server Isolated?"}
+    
+    %% Condition 3: True
+    Gate3 -->|True| SetVars3[Draft Update:<br>Server Isolated]
+    SetVars3 --> SetToCc3[Route to Server Infrastructure Team]
+    
+    %% Condition 3: False -> Leads to Gate 4
+    Gate3 -->|False| Gate4{"Was a Workstation Isolated?"}
+    Gate4 -->|True| SetVars4[Draft Update:<br>Workstation Isolated]
+    SetVars4 --> SetToCc4[Route to Desktop Support Team]
+    Gate4 -->|False| SkipNotifications[Do Nothing]
 
-### State Validation
+    %% Reconverging into Email Control Switch
+    SetToCc1 & SetToCc2 & SetToCc3 & SetToCc4 & SkipNotifications --> EmailControl{"Is Notification Override Active?"}
+    EmailControl -->|No| DoNothing[Use Default Team Routing]
+    EmailControl -->|Yes| OverrideRouting[Redirect All Emails to Admin Inbox]
 
-- An `Until` loop polls MDE machine action logs every 60 seconds.
-- It confirms whether isolation completed successfully.
-- It retries up to 15 times before concluding the operation.
-
+    %% Final Isolation Verification Step
+    OverrideRouting & DoNothing --> IsolateSuccessful{"Did Isolation Succeed?"}
+    IsolateSuccessful -->|Yes| SendSocEmail[Send Final Status Notification Email]
+    IsolateSuccessful -->|No| IsolationFailed[Log Failure Details to Audit History]
+   ```
+   
 ## Required Connections and Permissions
 
 ### Azure Logic App Connections
