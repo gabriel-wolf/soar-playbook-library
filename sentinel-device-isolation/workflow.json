@@ -1,1239 +1,590 @@
 {
-    "definition": {
-        "metadata": {
-            "agentType": "autonomous",
-            "notes": {}
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "logicAppName": {
+            "type": "string",
+            "defaultValue": "AutoIsolate-Playbook",
+            "metadata": { "description": "The name of your Logic App workflow." }
         },
-        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-        "contentVersion": "1.0.0.0",
-        "triggers": {
-            "Microsoft_Sentinel_incident": {
-                "type": "ApiConnectionWebhook",
-                "inputs": {
-                    "host": {
-                        "connection": {
-                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                        }
-                    },
-                    "body": {
-                        "callback_url": "@listCallbackUrl()"
-                    },
-                    "path": "/incident-creation"
-                }
-            }
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": { "description": "The Azure region to deploy into." }
         },
-        "actions": {
-            "Closed_Control": {
-                "actions": {
-                    "Closed_-_Terminate": {
-                        "type": "Terminate",
-                        "inputs": {
-                            "runStatus": "Cancelled"
-                        }
-                    }
-                },
-                "runAfter": {
-                    "For_Each_Alert": [
-                        "Succeeded"
-                    ]
-                },
-                "else": {
-                    "actions": {}
-                },
-                "expression": {
-                    "and": [
-                        {
-                            "equals": [
-                                "@parameters('CLOSED_CONTROL')",
-                                true
-                            ]
-                        },
-                        {
-                            "equals": [
-                                "@triggerBody()?['object']?['properties']?['status']",
-                                "Closed"
-                            ]
-                        }
-                    ]
-                },
-                "type": "If"
+        "subscriptionId": {
+            "type": "string",
+            "defaultValue": "[subscription().subscriptionId]",
+            "metadata": { "description": "Target subscription identifier." }
+        },
+        "resourceGroupName": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().name]",
+            "metadata": { "description": "Target resource group name." }
+        },
+        "keyVaultName": {
+            "type": "string",
+            "defaultValue": "your-keyvault-name",
+            "metadata": { "description": "Name of the key vault providing the Service Principal secret." }
+        },
+        "secretName": {
+            "type": "string",
+            "defaultValue": "GraphApiSecret",
+            "metadata": { "description": "Secret name containing the Client Secret for Microsoft Graph authentication." }
+        },
+        "graphTenantId": {
+            "type": "string",
+            "defaultValue": "00000000-0000-0000-0000-000000000000",
+            "metadata": { "description": "Tenant ID used for ActiveDirectoryOAuth authentication to Graph." }
+        },
+        "graphClientId": {
+            "type": "string",
+            "defaultValue": "00000000-0000-0000-0000-000000000000",
+            "metadata": { "description": "App Registration client ID with SecurityAlert.ReadWrite.All permissions." }
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('logicAppName')]",
+            "location": "[parameters('location')]",
+            "identity": {
+                "type": "SystemAssigned"
             },
-            "Prevented_Control": {
-                "actions": {
-                    "Prevented_-_Terminate": {
-                        "type": "Terminate",
-                        "inputs": {
-                            "runStatus": "Cancelled"
-                        }
-                    }
-                },
-                "runAfter": {
-                    "Closed_Control": [
-                        "Succeeded"
-                    ]
-                },
-                "else": {
-                    "actions": {}
-                },
-                "expression": {
-                    "and": [
-                        {
-                            "equals": [
-                                "@parameters('PREVENTED_CONTROL')",
-                                true
-                            ]
-                        },
-                        {
-                            "or": [
-                                {
-                                    "contains": [
-                                        "@triggerBody()?['object']?['properties']?['title']",
-                                        "was prevented"
-                                    ]
-                                },
-                                {
-                                    "contains": [
-                                        "@triggerBody()?['object']?['properties']?['title']",
-                                        "was blocked"
-                                    ]
-                                }
-                            ]
-                        }
-                    ]
-                },
-                "type": "If"
-            },
-            "For_Each_Host": {
-                "foreach": "@union(variables('ActiveEntities'), variables('ActiveEntities'))",
-                "actions": {
-                    "Set_IsAfterHours": {
-                        "type": "SetVariable",
-                        "inputs": {
-                            "name": "IsAfterHours",
-                            "value": "@or(\r\n  less(int(convertFromUtc(utcNow(), 'Central Standard Time', 'HH')), 8),\r\n  greaterOrEquals(int(convertFromUtc(utcNow(), 'Central Standard Time', 'HH')), 20)\r\n)"
-                        }
-                    },
-                    "Isolation_Logic": {
-                        "actions": {
-                            "IsIsolated_True": {
-                                "runAfter": {
-                                    "Isolate_Machine": [
-                                        "Succeeded"
-                                    ]
-                                },
-                                "type": "SetVariable",
-                                "inputs": {
-                                    "name": "IsIsolated",
-                                    "value": true
-                                }
-                            },
-                            "Isolate_Machine": {
-                                "type": "ApiConnection",
-                                "inputs": {
-                                    "host": {
-                                        "connection": {
-                                            "name": "@parameters('$connections')['wdatp-1']['connectionId']"
-                                        }
-                                    },
-                                    "method": "post",
-                                    "body": {
-                                        "Comment": "Isolated @{variables('DeviceName')} [@{variables('MachineID')}] due to @{triggerBody()?['object']?['properties']?['title']} [@{triggerBody()?['object']?['properties']?['additionalData']?['mergedIncidentNumber']}]",
-                                        "IsolationType": "Full"
-                                    },
-                                    "path": "/api/machines/@{encodeURIComponent(variables('MachineID'))}/isolate"
-                                }
-                            },
-                            "Update_incident": {
-                                "runAfter": {
-                                    "IsIsolated_True": [
-                                        "Succeeded"
-                                    ]
-                                },
-                                "type": "ApiConnection",
-                                "inputs": {
-                                    "host": {
-                                        "connection": {
-                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                        }
-                                    },
-                                    "method": "put",
-                                    "body": {
-                                        "incidentArmId": "@body('Get_incident')?['id']",
-                                        "tagsToAdd": {
-                                            "TagsToAdd": [
-                                                {
-                                                    "Tag": "AUTOCONTAIN"
-                                                }
-                                            ]
-                                        }
-                                    },
-                                    "path": "/Incidents"
-                                }
-                            }
-                        },
-                        "runAfter": {
-                            "Is_Server": [
-                                "Succeeded"
-                            ]
-                        },
-                        "else": {
-                            "actions": {
-                                "IsIsolated_False": {
-                                    "runAfter": {
-                                        "Set_MachineID_to_TestBox": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "IsIsolated",
-                                        "value": false
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/connections/azuresentinel')]"
                                     }
                                 },
-                                "Set_MachineID_to_TestBox": {
+                                "body": {
+                                    "callback_url": "@listCallbackUrl()"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Closed_Control": {
+                            "type": "If",
+                            "expression": {
+                                "and": [
+                                    { "equals": [ "@parameters('CLOSED_CONTROL')", true ] },
+                                    { "equals": [ "@triggerBody()?['object']?['properties']?['status']", "Closed" ] }
+                                ]
+                            },
+                            "actions": {
+                                "Closed_-_Terminate": {
+                                    "type": "Terminate",
+                                    "inputs": { "runStatus": "Cancelled" }
+                                }
+                            },
+                            "runAfter": {
+                                "For_Each_Alert": [ "Succeeded" ]
+                            }
+                        },
+                        "Prevented_Control": {
+                            "type": "If",
+                            "expression": {
+                                "and": [
+                                    { "equals": [ "@parameters('PREVENTED_CONTROL')", true ] },
+                                    {
+                                        "or": [
+                                            { "contains": [ "@triggerBody()?['object']?['properties']?['title']", "was prevented" ] },
+                                            { "contains": [ "@triggerBody()?['object']?['properties']?['title']", "was blocked" ] }
+                                        ]
+                                    }
+                                ]
+                            },
+                            "actions": {
+                                "Prevented_-_Terminate": {
+                                    "type": "Terminate",
+                                    "inputs": { "runStatus": "Cancelled" }
+                                }
+                            },
+                            "runAfter": {
+                                "Closed_Control": [ "Succeeded" ]
+                            }
+                        },
+                        "Compose_Incident_URL": {
+                            "type": "Compose",
+                            "inputs": "<a href=\"https://security.microsoft.com/incidents/@{triggerBody()?['object']?['properties']?['providerIncidentId']}\">@{triggerBody()?['object']?['properties']?['title']}</a>",
+                            "runAfter": {
+                                "Prevented_Control": [ "Succeeded" ]
+                            }
+                        },
+                        "Compose_Alerts": {
+                            "type": "Compose",
+                            "inputs": "@variables('ActiveAlerts')",
+                            "runAfter": {
+                                "Compose_Incident_URL": [ "Succeeded" ]
+                            }
+                        },
+                        "Summary_Agent": {
+                            "type": "Agent",
+                            "inputs": {
+                                "parameters": {
+                                    "messages": [
+                                        {
+                                            "role": "system",
+                                            "content": "A device, or multiple devices have just been isolated. \n\nYou have been given the list of devices that were isolated and a list of triggered alerts that caused the isolation of that device. Note, that because this processes has taken place, it means that it was determined that automatic remediation missed or did not \"prevent\" or \"block\" a process. So please summarize from the point of view of before isolation. Don't even mention the isolation that the current process took. You are writing a summary of why you isolated, so the fact that you took action or isolated is irrelevant. No bold or formatting allowed. You need to write a summary of that alert in only 1-2 lines. Do not return any conversational details, only return the 1-2 line summary. Please also include before the 1-2 line summary the name of the device for example:\n\nDEVICENAME.domain.com: XXXX \n\n### Device Names:\n@{union(variables('ActiveEntities'), variables('ActiveEntities'))}\n\n### Alerts:\n@{outputs('Compose_Alerts')}"
+                                        }
+                                    ],
+                                    "agentModelType": "AzureOpenAI",
+                                    "agentModelSettings": {
+                                        "agentHistoryReductionSettings": {
+                                            "agentHistoryReductionType": "maximumTokenCountReduction",
+                                            "maximumTokenCount": 128000
+                                        }
+                                    },
+                                    "modelId": "gpt-4o-mini"
+                                }
+                            },
+                            "limit": { "count": 100 },
+                            "runAfter": {
+                                "Compose_Alerts": [ "Succeeded" ]
+                            }
+                        },
+                        "Initialize_Variables": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    { "name": "DeviceName", "type": "string" },
+                                    { "name": "IsServer", "type": "boolean", "value": false },
+                                    { "name": "TO", "type": "string", "value": "analyst@example.com" },
+                                    { "name": "CC", "type": "string", "value": "analyst@example.com" },
+                                    { "name": "SUBJECT", "type": "string", "value": "TEST EMAIL" },
+                                    { "name": "BODY", "type": "string" },
+                                    { "name": "MachineID", "type": "string" },
+                                    { "name": "IsAfterHours", "type": "boolean", "value": false },
+                                    { "name": "IsIsolated", "type": "boolean", "value": false },
+                                    { "name": "OS Platform", "type": "string" },
+                                    { "name": "Isolation Confirmed", "type": "boolean", "value": false },
+                                    { "name": "AadDeviceID", "type": "string" },
+                                    { "name": "ActiveEntities", "type": "array" },
+                                    { "name": "ActiveAlerts", "type": "array" }
+                                ]
+                            },
+                            "runAfter": {
+                                "Get_incident": [ "Succeeded" ]
+                            }
+                        },
+                        "Get_incident": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/connections/azuresentinel')]"
+                                    }
+                                },
+                                "method": "post",
+                                "body": { "incidentArmId": "@triggerBody()?['object']?['id']" },
+                                "path": "/Incidents"
+                            },
+                            "runAfter": {}
+                        },
+                        "Get_SP_Secret": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/connections/keyvault-1')]"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/', encodeURIComponent(parameters('secretName')), '/value')]"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": { "properties": [ "inputs", "outputs" ] }
+                            },
+                            "runAfter": {
+                                "Initialize_Variables": [ "Succeeded" ]
+                            }
+                        },
+                        "For_Each_Alert": {
+                            "type": "Foreach",
+                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                            "actions": {
+                                "Get_Alert_Details": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "https://graph.microsoft.com/v1.0/security/alerts_v2/da@{items('For_Each_Alert')?['properties']?['providerAlertId']}",
+                                        "method": "GET",
+                                        "headers": {
+                                            "Content-Type": "application/json",
+                                            "Prefer": "include-unknown-enum-members"
+                                        },
+                                        "authentication": {
+                                            "type": "ActiveDirectoryOAuth",
+                                            "authority": "https://login.microsoftonline.com",
+                                            "tenant": "[parameters('graphTenantId')]",
+                                            "audience": "https://graph.microsoft.com",
+                                            "clientId": "[parameters('graphClientId')]",
+                                            "secret": "@{body('Get_SP_Secret')?['value']}"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": { "transferMode": "Chunked" }
+                                    }
+                                },
+                                "Filter_Remediation": {
+                                    "type": "Query",
+                                    "inputs": {
+                                        "from": "@body('Get_Alert_Details')?['evidence']",
+                                        "where": "@and(equals(item()?['@odata.type'], '#microsoft.graph.security.fileEvidence'), equals(item()?['remediationStatus'], 'active'))"
+                                    },
+                                    "runAfter": {
+                                        "Get_Alert_Details": [ "Succeeded" ]
+                                    }
+                                },
+                                "Check_Active": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            { "greater": [ "@length(body('Filter_Remediation'))", 0 ] }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Append_to_ActiveEntities": {
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "ActiveEntities",
+                                                "value": {
+                                                    "mdeDeviceId": "@{body('Get_Alert_Details')?['evidence']?[0]?['mdeDeviceId']}",
+                                                    "azureAdDeviceId": "@{body('Get_Alert_Details')?['evidence']?[0]?['azureAdDeviceId']}",
+                                                    "osPlatform": "@{body('Get_Alert_Details')?['evidence']?[0]?['osPlatform']}",
+                                                    "deviceDnsName": "@{body('Get_Alert_Details')?['evidence']?[0]?['deviceDnsName']}"
+                                                }
+                                            }
+                                        },
+                                        "Append_to_ActiveAlerts": {
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "ActiveAlerts",
+                                                "value": "@first(variables('ActiveEntities'))"
+                                            },
+                                            "runAfter": {
+                                                "Append_to_ActiveEntities": [ "Succeeded" ]
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Filter_Remediation": [ "Succeeded" ]
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Get_SP_Secret": [ "Succeeded" ]
+                            }
+                        },
+                        "For_Each_Host": {
+                            "type": "Foreach",
+                            "foreach": "@union(variables('ActiveEntities'), variables('ActiveEntities'))",
+                            "actions": {
+                                "Set_IsAfterHours": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "IsAfterHours",
+                                        "value": "@or(less(int(convertFromUtc(utcNow(), 'Central Standard Time', 'HH')), 8), greaterOrEquals(int(convertFromUtc(utcNow(), 'Central Standard Time', 'HH')), 20))"
+                                    }
+                                },
+                                "Set_MachineID": {
                                     "type": "SetVariable",
                                     "inputs": {
                                         "name": "MachineID",
-                                        "value": "0000000000000000000000000000000000000000"
-                                    }
-                                }
-                            }
-                        },
-                        "expression": {
-                            "or": [
-                                {
-                                    "and": [
-                                        {
-                                            "equals": [
-                                                "@parameters('AFTERHOURS_CONTROL')",
-                                                true
-                                            ]
-                                        },
-                                        {
-                                            "equals": [
-                                                "@variables('IsAfterHours')",
-                                                true
-                                            ]
-                                        },
-                                        {
-                                            "equals": [
-                                                "@parameters('ISOLATE_CONTROL')",
-                                                true
-                                            ]
-                                        }
-                                    ]
+                                        "value": "@items('For_Each_Host')?['mdeDeviceId']"
+                                    },
+                                    "runAfter": { "Set_IsAfterHours": [ "Succeeded" ] }
                                 },
-                                {
-                                    "and": [
-                                        {
-                                            "equals": [
-                                                "@variables('IsServer')",
-                                                false
-                                            ]
-                                        },
-                                        {
-                                            "equals": [
-                                                "@parameters('ISOLATE_CONTROL')",
-                                                true
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ]
-                        },
-                        "type": "If"
-                    },
-                    "Is_Server": {
-                        "actions": {
-                            "IsServer_True": {
-                                "type": "SetVariable",
-                                "inputs": {
-                                    "name": "IsServer",
-                                    "value": true
-                                }
-                            }
-                        },
-                        "runAfter": {
-                            "Set_OS_Platform": [
-                                "Succeeded"
-                            ]
-                        },
-                        "else": {
-                            "actions": {
-                                "IsServer_False": {
+                                "Set_AadDeviceID": {
                                     "type": "SetVariable",
                                     "inputs": {
-                                        "name": "IsServer",
-                                        "value": false
-                                    }
-                                }
-                            }
-                        },
-                        "expression": {
-                            "or": [
-                                {
-                                    "contains": [
-                                        "@variables('OS Platform')",
-                                        "Server"
-                                    ]
-                                },
-                                {
-                                    "contains": [
-                                        "@variables('OS Platform')",
-                                        "Linux"
-                                    ]
-                                }
-                            ]
-                        },
-                        "type": "If"
-                    },
-                    "Set_MachineID": {
-                        "runAfter": {
-                            "Set_IsAfterHours": [
-                                "Succeeded"
-                            ]
-                        },
-                        "type": "SetVariable",
-                        "inputs": {
-                            "name": "MachineID",
-                            "value": "@items('For_Each_Host')?['mdeDeviceId']"
-                        }
-                    },
-                    "Get_Single_Machine": {
-                        "runAfter": {
-                            "Set_AadDeviceID": [
-                                "Succeeded"
-                            ]
-                        },
-                        "type": "ApiConnection",
-                        "inputs": {
-                            "host": {
-                                "connection": {
-                                    "name": "@parameters('$connections')['wdatp']['connectionId']"
-                                }
-                            },
-                            "method": "get",
-                            "path": "/api/machines/@{encodeURIComponent(variables('MachineID'))}"
-                        }
-                    },
-                    "Set_OS_Platform": {
-                        "runAfter": {
-                            "Set_DeviceName": [
-                                "Succeeded"
-                            ]
-                        },
-                        "type": "SetVariable",
-                        "inputs": {
-                            "name": "OS Platform",
-                            "value": "@body('Get_Single_Machine')?['osPlatform']"
-                        }
-                    },
-                    "Set_DeviceName": {
-                        "runAfter": {
-                            "Get_Single_Machine": [
-                                "Succeeded"
-                            ]
-                        },
-                        "type": "SetVariable",
-                        "inputs": {
-                            "name": "DeviceName",
-                            "value": "@body('Get_Single_Machine')?['computerDnsName']"
-                        }
-                    },
-                    "Until": {
-                        "actions": {
-                            "Confirm_Isolation": {
-                                "actions": {
-                                    "Isolation_Confirmed": {
-                                        "type": "SetVariable",
-                                        "inputs": {
-                                            "name": "Isolation Confirmed",
-                                            "value": true
-                                        }
-                                    }
-                                },
-                                "runAfter": {
-                                    "Compose_Latest_Action": [
-                                        "Succeeded"
-                                    ]
-                                },
-                                "else": {
-                                    "actions": {
-                                        "Isolation_Not_Confirmed": {
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "Isolation Confirmed",
-                                                "value": false
-                                            }
-                                        },
-                                        "60s_Delay": {
-                                            "runAfter": {
-                                                "Isolation_Not_Confirmed": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "Wait",
-                                            "inputs": {
-                                                "interval": {
-                                                    "count": 60,
-                                                    "unit": "Second"
-                                                }
-                                            }
-                                        }
-                                    }
-                                },
-                                "expression": {
-                                    "and": [
-                                        {
-                                            "equals": [
-                                                "@outputs('Compose_Latest_Action')?['status']\r\n",
-                                                "Succeeded"
-                                            ]
-                                        }
-                                    ]
-                                },
-                                "type": "If"
-                            },
-                            "Filter_Isolate_Machine_Actions": {
-                                "runAfter": {
-                                    "Get_All_Actions": [
-                                        "Succeeded"
-                                    ]
-                                },
-                                "type": "Query",
-                                "inputs": {
-                                    "from": "@body('Get_All_Actions')?['value']",
-                                    "where": "@and(\n    equals(item()?['machineId'], variables('MachineID')),\n    equals(item()?['type'], 'Isolate')\n)\n"
-                                }
-                            },
-                            "Get_All_Actions": {
-                                "runAfter": {
-                                    "5s_delay": [
-                                        "Succeeded"
-                                    ]
-                                },
-                                "type": "ApiConnection",
-                                "inputs": {
-                                    "host": {
-                                        "connection": {
-                                            "name": "@parameters('$connections')['wdatp-1']['connectionId']"
-                                        }
+                                        "name": "AadDeviceID",
+                                        "value": "@items('For_Each_Host')?['azureAdDeviceId']"
                                     },
-                                    "method": "get",
-                                    "path": "/api/machineactions"
-                                }
-                            },
-                            "Compose_Latest_Action": {
-                                "runAfter": {
-                                    "Filter_Isolate_Machine_Actions": [
-                                        "Succeeded"
-                                    ]
+                                    "runAfter": { "Set_MachineID": [ "Succeeded" ] }
                                 },
-                                "type": "Compose",
-                                "inputs": "@first(body('Filter_Isolate_Machine_Actions'))\r\n"
-                            },
-                            "5s_delay": {
-                                "type": "Wait",
-                                "inputs": {
-                                    "interval": {
-                                        "count": 5,
-                                        "unit": "Second"
-                                    }
-                                }
-                            }
-                        },
-                        "runAfter": {
-                            "Isolation_Logic": [
-                                "Succeeded"
-                            ]
-                        },
-                        "expression": "@equals(variables('Isolation Confirmed'), true)",
-                        "limit": {
-                            "count": 15,
-                            "timeout": "PT1H"
-                        },
-                        "type": "Until"
-                    },
-                    "Set_AadDeviceID": {
-                        "runAfter": {
-                            "Set_MachineID": [
-                                "Succeeded"
-                            ]
-                        },
-                        "type": "SetVariable",
-                        "inputs": {
-                            "name": "AadDeviceID",
-                            "value": "@items('For_Each_Host')?['azureAdDeviceId']"
-                        }
-                    },
-                    "Isolate_Successful": {
-                        "actions": {
-                            "Send_SOC_Email": {
-                                "type": "ApiConnection",
-                                "inputs": {
-                                    "host": {
-                                        "connection": {
-                                            "name": "@parameters('$connections')['office365']['connectionId']"
-                                        }
-                                    },
-                                    "method": "post",
-                                    "body": {
-                                        "To": "@variables('TO')",
-                                        "Subject": "@variables('SUBJECT')",
-                                        "Body": "<p class=\"editor-paragraph\">@{variables('BODY')}<br><br><b><strong class=\"editor-text-bold\">Device Name:</strong></b><br>@{variables('DeviceName')}<br><br><b><strong class=\"editor-text-bold\">Reason:</strong></b><br>@{outputs('Compose_Incident_URL')}</p><br><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Trigger:</strong></b><br>@{outputs('Summary_Agent')?['lastAssistantMessage']}</p>",
-                                        "Cc": "@variables('CC')",
-                                        "Importance": "High"
-                                    },
-                                    "path": "/v2/Mail"
-                                }
-                            }
-                        },
-                        "runAfter": {
-                            "Email_Control": [
-                                "Succeeded"
-                            ]
-                        },
-                        "else": {
-                            "actions": {
-                                "Isolation_Failed": {
+                                "Get_Single_Machine": {
                                     "type": "ApiConnection",
                                     "inputs": {
                                         "host": {
                                             "connection": {
-                                                "name": "@parameters('$connections')['office365-1']['connectionId']"
+                                                "name": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/connections/wdatp')]"
                                             }
                                         },
-                                        "method": "post",
-                                        "body": {
-                                            "To": "@variables('TO')",
-                                            "Subject": "DEVICE ISOLATION FAILED - Action Required - Security AutoContain",
-                                            "Body": "<p class=\"editor-paragraph\"><i><em class=\"editor-text-italic\">Security AutoContain attempted to isolate the device but was unable to confirm success.</em></i><br>Microsoft Security Controls have determined the following device is at-risk or already compromised.</p><br><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\" style=\"color: rgb(208, 2, 27);\">Analyst Actions Needed:</strong></b><br><span style=\"color: rgb(208, 2, 27);\">Review the referenced Incident / Alert</span><br><span style=\"color: rgb(208, 2, 27);\">Complete remediation</span><br><span style=\"color: rgb(208, 2, 27);\">Notify relevant SOC Group of recovery requirements</span><br><span style=\"color: rgb(208, 2, 27);\">Update/Close Incident in Defender</span></p><p class=\"editor-paragraph\"><br><b><strong class=\"editor-text-bold\">Device Name:</strong></b><br>@{variables('DeviceName')}<br><br><b><strong class=\"editor-text-bold\">Reason:</strong></b><br>@{outputs('Compose_Incident_URL')}</p><br><p class=\"editor-paragraph\"><b><strong class=\"editor-text-bold\">Trigger:</strong></b><br>@{outputs('Summary_Agent')?['lastAssistantMessage']}</p>",
-                                            "Cc": "@variables('CC')",
-                                            "Importance": "Normal"
-                                        },
-                                        "path": "/v2/Mail"
-                                    }
-                                }
-                            }
-                        },
-                        "expression": {
-                            "and": [
-                                {
-                                    "equals": [
-                                        "@variables('Isolation Confirmed')",
-                                        true
-                                    ]
-                                }
-                            ]
-                        },
-                        "type": "If"
-                    },
-                    "[1]_Isolation_Not_Enabled": {
-                        "actions": {
-                            "SUBJECT_[Not_Enabled]": {
-                                "type": "SetVariable",
-                                "inputs": {
-                                    "name": "SUBJECT",
-                                    "value": "Isolation Not Enabled"
-                                }
-                            },
-                            "BODY_[Not_Enabled]": {
-                                "runAfter": {
-                                    "SUBJECT_[Not_Enabled]": [
-                                        "Succeeded"
-                                    ]
+                                        "method": "get",
+                                        "path": "/api/machines/@{encodeURIComponent(variables('MachineID'))}"
+                                    },
+                                    "runAfter": { "Set_AadDeviceID": [ "Succeeded" ] }
                                 },
-                                "type": "SetVariable",
-                                "inputs": {
-                                    "name": "BODY",
-                                    "value": "This is a message from Security-Auto-Isolation. <b>Isolation is currently disabled, the test machine has been isolated as a test.</b> <i>fix that in the Logic App Parameters.</i> Thank you."
-                                }
-                            },
-                            "TO_analyst_[2]": {
-                                "runAfter": {
-                                    "BODY_[Not_Enabled]": [
-                                        "Succeeded"
-                                    ]
+                                "Set_DeviceName": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "DeviceName",
+                                        "value": "@body('Get_Single_Machine')?['computerDnsName']"
+                                    },
+                                    "runAfter": { "Get_Single_Machine": [ "Succeeded" ] }
                                 },
-                                "type": "SetVariable",
-                                "inputs": {
-                                    "name": "TO",
-                                    "value": "analyst@example.com"
-                                }
-                            },
-                            "CC_analyst_[2]": {
-                                "runAfter": {
-                                    "TO_analyst_[2]": [
-                                        "Succeeded"
-                                    ]
+                                "Set_OS_Platform": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "OS Platform",
+                                        "value": "@body('Get_Single_Machine')?['osPlatform']"
+                                    },
+                                    "runAfter": { "Set_DeviceName": [ "Succeeded" ] }
                                 },
-                                "type": "SetVariable",
-                                "inputs": {
-                                    "name": "CC",
-                                    "value": "analyst@example.com"
-                                }
-                            }
-                        },
-                        "runAfter": {
-                            "Until": [
-                                "Succeeded"
-                            ]
-                        },
-                        "else": {
-                            "actions": {
-                                "[2]_Server_at_Risk": {
+                                "Is_Server": {
+                                    "type": "If",
+                                    "expression": {
+                                        "or": [
+                                            { "contains": [ "@variables('OS Platform')", "Server" ] },
+                                            { "contains": [ "@variables('OS Platform')", "Linux" ] }
+                                        ]
+                                    },
                                     "actions": {
-                                        "SUBJECT_[Risk]": {
+                                        "IsServer_True": {
                                             "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "SUBJECT",
-                                                "value": "Server at Risk"
-                                            }
-                                        },
-                                        "BODY_[Risk]": {
-                                            "runAfter": {
-                                                "SUBJECT_[Risk]": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "BODY",
-                                                "value": "Microsoft Security Controls have determined the following Server is at-risk or already compromised.\n \n<p style=\"color: #d0021b;\"><b>Analyst Actions Needed:</b><br>\nReview the referenced Incident / Alert<br>\nComplete remediation<br>\nNotify relevant SOC Group (if needed)<br>\nUpdate/Close Incident in Defender</p>"
-                                            }
-                                        },
-                                        "TO_[Risk]": {
-                                            "runAfter": {
-                                                "BODY_[Risk]": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "TO",
-                                                "value": "soc@example.com"
-                                            }
-                                        },
-                                        "CC_[Risk]": {
-                                            "runAfter": {
-                                                "TO_[Risk]": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "CC",
-                                                "value": "analyst@example.com,manager@example.com"
-                                            }
+                                            "inputs": { "name": "IsServer", "value": true }
                                         }
                                     },
                                     "else": {
                                         "actions": {
-                                            "[3]_Server_Has_Been_Disabled": {
-                                                "actions": {
-                                                    "SUBJECT_[Server]": {
-                                                        "type": "SetVariable",
-                                                        "inputs": {
-                                                            "name": "SUBJECT",
-                                                            "value": "Server Has Been Isolated by Security AutoContain"
-                                                        }
-                                                    },
-                                                    "TO_[Server]": {
-                                                        "runAfter": {
-                                                            "BODY_[Server]": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "SetVariable",
-                                                        "inputs": {
-                                                            "name": "TO",
-                                                            "value": "soc@example.com"
-                                                        }
-                                                    },
-                                                    "CC_[Server]": {
-                                                        "runAfter": {
-                                                            "TO_[Server]": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "SetVariable",
-                                                        "inputs": {
-                                                            "name": "CC",
-                                                            "value": "analyst@example.com,manager@example.com"
-                                                        }
-                                                    },
-                                                    "BODY_[Server]": {
-                                                        "runAfter": {
-                                                            "SUBJECT_[Server]": [
-                                                                "Succeeded"
-                                                            ]
-                                                        },
-                                                        "type": "SetVariable",
-                                                        "inputs": {
-                                                            "name": "BODY",
-                                                            "value": "<b>SERVER ISOLATED</b><br>\nMicrosoft Security Controls have determined the following Server is at-risk or already compromised.\n\n<p style=\"color: #d0021b;\"><b>Analyst Actions Needed:</b><br>\nReview the referenced Incident / Alert<br>\nComplete remediation<br>\nNotify relevant SOC Group of recovery requirements<br>\nUpdate/Close Incident in Defender</p>"
-                                                        }
-                                                    }
-                                                },
-                                                "else": {
-                                                    "actions": {
-                                                        "[4]_Workstation_Has_Been_Disabled": {
-                                                            "actions": {
-                                                                "SUBJECT_[Workstation]": {
-                                                                    "type": "SetVariable",
-                                                                    "inputs": {
-                                                                        "name": "SUBJECT",
-                                                                        "value": "Workstation Has Been Isolated by Security AutoContain"
-                                                                    }
-                                                                },
-                                                                "TO_[Workstation]": {
-                                                                    "runAfter": {
-                                                                        "BODY_[Workstation]": [
-                                                                            "Succeeded"
-                                                                        ]
-                                                                    },
-                                                                    "type": "SetVariable",
-                                                                    "inputs": {
-                                                                        "name": "TO",
-                                                                        "value": "soc@example.com"
-                                                                    }
-                                                                },
-                                                                "BODY_[Workstation]": {
-                                                                    "runAfter": {
-                                                                        "SUBJECT_[Workstation]": [
-                                                                            "Succeeded"
-                                                                        ]
-                                                                    },
-                                                                    "type": "SetVariable",
-                                                                    "inputs": {
-                                                                        "name": "BODY",
-                                                                        "value": "<b>WORKSTATION ISOLATED</b><br>\nMicrosoft Security Controls have determined the following device is at-risk or already compromised.\n\n<p style=\"color: #d0021b;\"><b>Analyst Actions Needed:</b><br>\nReview the referenced Incident / Alert<br>\nComplete remediation<br>\nNotify relevant SOC Group of recovery requirements<br>\nUpdate/Close Incident in Defender</p>"
-                                                                    }
-                                                                },
-                                                                "CC_[Workstation]": {
-                                                                    "runAfter": {
-                                                                        "TO_[Workstation]": [
-                                                                            "Succeeded"
-                                                                        ]
-                                                                    },
-                                                                    "type": "SetVariable",
-                                                                    "inputs": {
-                                                                        "name": "CC",
-                                                                        "value": "analyst@example.com"
-                                                                    }
-                                                                }
-                                                            },
-                                                            "else": {
-                                                                "actions": {}
-                                                            },
-                                                            "expression": {
-                                                                "or": [
-                                                                    {
-                                                                        "and": [
-                                                                            {
-                                                                                "equals": [
-                                                                                    "@variables('IsIsolated')",
-                                                                                    true
-                                                                                ]
-                                                                            },
-                                                                            {
-                                                                                "equals": [
-                                                                                    "@variables('IsServer')",
-                                                                                    false
-                                                                                ]
-                                                                            }
-                                                                        ]
-                                                                    },
-                                                                    {
-                                                                        "equals": [
-                                                                            "@parameters('SIMULATE_EMAIL')",
-                                                                            4
-                                                                        ]
-                                                                    }
-                                                                ]
-                                                            },
-                                                            "type": "If"
-                                                        }
-                                                    }
-                                                },
-                                                "expression": {
-                                                    "or": [
-                                                        {
-                                                            "and": [
-                                                                {
-                                                                    "equals": [
-                                                                        "@variables('IsServer')",
-                                                                        true
-                                                                    ]
-                                                                },
-                                                                {
-                                                                    "equals": [
-                                                                        "@variables('IsIsolated')",
-                                                                        true
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "equals": [
-                                                                "@parameters('SIMULATE_EMAIL')",
-                                                                3
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                "type": "If"
+                                            "IsServer_False": {
+                                                "type": "SetVariable",
+                                                "inputs": { "name": "IsServer", "value": false }
                                             }
                                         }
                                     },
+                                    "runAfter": { "Set_OS_Platform": [ "Succeeded" ] }
+                                },
+                                "Isolation_Logic": {
+                                    "type": "If",
                                     "expression": {
                                         "or": [
                                             {
                                                 "and": [
-                                                    {
-                                                        "equals": [
-                                                            "@variables('IsIsolated')",
-                                                            false
-                                                        ]
-                                                    },
-                                                    {
-                                                        "equals": [
-                                                            "@variables('IsServer')",
-                                                            true
-                                                        ]
-                                                    }
+                                                    { "equals": [ "@parameters('AFTERHOURS_CONTROL')", true ] },
+                                                    { "equals": [ "@variables('IsAfterHours')", true ] },
+                                                    { "equals": [ "@parameters('ISOLATE_CONTROL')", true ] }
                                                 ]
                                             },
                                             {
-                                                "equals": [
-                                                    "@parameters('SIMULATE_EMAIL')",
-                                                    2
+                                                "and": [
+                                                    { "equals": [ "@variables('IsServer')", false ] },
+                                                    { "equals": [ "@parameters('ISOLATE_CONTROL')", true ] }
                                                 ]
                                             }
                                         ]
                                     },
-                                    "type": "If"
-                                }
-                            }
-                        },
-                        "expression": {
-                            "or": [
-                                {
-                                    "equals": [
-                                        "@parameters('SIMULATE_EMAIL')",
-                                        1
-                                    ]
-                                },
-                                {
-                                    "and": [
-                                        {
-                                            "equals": [
-                                                "@parameters('ISOLATE_CONTROL')",
-                                                false
-                                            ]
+                                    "actions": {
+                                        "Isolate_Machine": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/connections/wdatp')]"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "body": {
+                                                    "Comment": "Isolated @{variables('DeviceName')} [@{variables('MachineID')}] due to @{triggerBody()?['object']?['properties']?['title']} [@{triggerBody()?['object']?['properties']?['additionalData']?['mergedIncidentNumber']}]",
+                                                    "IsolationType": "Full"
+                                                },
+                                                "path": "/api/machines/@{encodeURIComponent(variables('MachineID'))}/isolate"
+                                            }
                                         },
-                                        {
-                                            "equals": [
-                                                "@parameters('SIMULATE_EMAIL')",
-                                                0
-                                            ]
+                                        "IsIsolated_True": {
+                                            "type": "SetVariable",
+                                            "inputs": { "name": "IsIsolated", "value": true },
+                                            "runAfter": { "Isolate_Machine": [ "Succeeded" ] }
+                                        },
+                                        "Update_incident": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/connections/azuresentinel')]"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "body": {
+                                                    "incidentArmId": "@body('Get_incident')?['id']",
+                                                    "tagsToAdd": { "TagsToAdd": [ { "Tag": "AUTOCONTAIN" } ] }
+                                                },
+                                                "path": "/Incidents"
+                                            },
+                                            "runAfter": { "IsIsolated_True": [ "Succeeded" ] }
                                         }
-                                    ]
-                                }
-                            ]
-                        },
-                        "type": "If"
-                    },
-                    "Email_Control": {
-                        "actions": {},
-                        "runAfter": {
-                            "[1]_Isolation_Not_Enabled": [
-                                "Succeeded"
-                            ]
-                        },
-                        "else": {
-                            "actions": {
-                                "TO_analyst": {
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "TO",
-                                        "value": "analyst@example.com"
-                                    }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_MachineID_to_TestBox": {
+                                                "type": "SetVariable",
+                                                "inputs": { "name": "MachineID", "value": "0000000000000000000000000000000000000000" }
+                                            },
+                                            "IsIsolated_False": {
+                                                "type": "SetVariable",
+                                                "inputs": { "name": "IsIsolated", "value": false },
+                                                "runAfter": { "Set_MachineID_to_TestBox": [ "Succeeded" ] }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": { "Is_Server": [ "Succeeded" ] }
                                 },
-                                "CC_analyst": {
-                                    "runAfter": {
-                                        "TO_analyst": [
-                                            "Succeeded"
+                                "Until": {
+                                    "type": "Until",
+                                    "expression": "@equals(variables('Isolation Confirmed'), true)",
+                                    "limit": { "count": 15, "timeout": "PT1H" },
+                                    "actions": {
+                                        "5s_delay": { "type": "Wait", "inputs": { "interval": { "count": 5, "unit": "Second" } } },
+                                        "Get_All_Actions": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/connections/wdatp')]"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/api/machineactions"
+                                            },
+                                            "runAfter": { "5s_delay": [ "Succeeded" ] }
+                                        },
+                                        "Filter_Isolate_Machine_Actions": {
+                                            "type": "Query",
+                                            "inputs": {
+                                                "from": "@body('Get_All_Actions')?['value']",
+                                                "where": "@and(equals(item()?['machineId'], variables('MachineID')), equals(item()?['type'], 'Isolate'))"
+                                            },
+                                            "runAfter": { "Get_All_Actions": [ "Succeeded" ] }
+                                        },
+                                        "Compose_Latest_Action": {
+                                            "type": "Compose",
+                                            "inputs": "@first(body('Filter_Isolate_Machine_Actions'))",
+                                            "runAfter": { "Filter_Isolate_Machine_Actions": [ "Succeeded" ] }
+                                        },
+                                        "Confirm_Isolation": {
+                                            "type": "If",
+                                            "expression": {
+                                                "and": [
+                                                    { "equals": [ "@outputs('Compose_Latest_Action')?['status']\r\n", "Succeeded" ] }
+                                                ]
+                                            },
+                                            "actions": {
+                                                "Isolation_Confirmed": {
+                                                    "type": "SetVariable",
+                                                    "inputs": { "name": "Isolation Confirmed", "value": true }
+                                                }
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Isolation_Not_Confirmed": {
+                                                        "type": "SetVariable",
+                                                        "inputs": { "name": "Isolation Confirmed", "value": false }
+                                                    },
+                                                    "60s_Delay": {
+                                                        "type": "Wait",
+                                                        "inputs": { "interval": { "count": 60, "unit": "Second" } },
+                                                        "runAfter": { "Isolation_Not_Confirmed": [ "Succeeded" ] }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": { "Compose_Latest_Action": [ "Succeeded" ] }
+                                        }
+                                    },
+                                    "runAfter": { "Isolation_Logic": [ "Succeeded" ] }
+                                },
+                                "[1]_Isolation_Not_Enabled": {
+                                    "type": "If",
+                                    "expression": {
+                                        "or": [
+                                            { "equals": [ "@parameters('SIMULATE_EMAIL')", 1 ] },
+                                            {
+                                                "and": [
+                                                    { "equals": [ "@parameters('ISOLATE_CONTROL')", false ] },
+                                                    { "equals": [ "@parameters('SIMULATE_EMAIL')", 0 ] }
+                                                ]
+                                            }
                                         ]
                                     },
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "CC",
-                                        "value": "analyst@example.com"
-                                    }
-                                }
-                            }
-                        },
-                        "expression": {
-                            "and": [
-                                {
-                                    "equals": [
-                                        "@parameters('EMAIL_CONTROL')",
-                                        true
-                                    ]
-                                }
-                            ]
-                        },
-                        "type": "If"
-                    }
-                },
-                "runAfter": {
-                    "Summary_Agent": [
-                        "Succeeded"
-                    ]
-                },
-                "type": "Foreach"
-            },
-            "Compose_Incident_URL": {
-                "runAfter": {
-                    "Prevented_Control": [
-                        "Succeeded"
-                    ]
-                },
-                "type": "Compose",
-                "inputs": "<a href=\"https://security.microsoft.com/incidents/@{triggerBody()?['object']?['properties']?['providerIncidentId']}\">@{triggerBody()?['object']?['properties']?['title']}</a>"
-            },
-            "For_Each_Alert": {
-                "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
-                "actions": {
-                    "Get_Alert_Details": {
-                        "type": "Http",
-                        "inputs": {
-                            "uri": "https://graph.microsoft.com/v1.0/security/alerts_v2/da@{items('For_Each_Alert')?['properties']?['providerAlertId']}",
-                            "method": "GET",
-                            "headers": {
-                                "Content-Type": "application/json",
-                                "Prefer": "include-unknown-enum-members"
-                            },
-                            "authentication": {
-                                "type": "ActiveDirectoryOAuth",
-                                "authority": "https://login.microsoftonline.com",
-                                "tenant": "00000000-0000-0000-0000-000000000000",
-                                "audience": "https://graph.microsoft.com",
-                                "clientId": "00000000-0000-0000-0000-000000000000",
-                                "secret": "@{body('Get_SP_Secret')?['value']}"
-                            }
-                        },
-                        "runtimeConfiguration": {
-                            "contentTransfer": {
-                                "transferMode": "Chunked"
-                            }
-                        }
-                    },
-                    "Filter_Remediation": {
-                        "runAfter": {
-                            "Get_Alert_Details": [
-                                "Succeeded"
-                            ]
-                        },
-                        "type": "Query",
-                        "inputs": {
-                            "from": "@body('Get_Alert_Details')?['evidence']",
-                            "where": "@and(equals(item()?['@odata.type'], '#microsoft.graph.security.fileEvidence'), equals(item()?['remediationStatus'], 'active'))"
-                        }
-                    },
-                    "Check_Active": {
-                        "actions": {
-                            "Append_to_ActiveEntities": {
-                                "type": "AppendToArrayVariable",
-                                "inputs": {
-                                    "name": "ActiveEntities",
-                                    "value": {
-                                        "mdeDeviceId": "@{body('Get_Alert_Details')?['evidence']?[0]?['mdeDeviceId']}",
-                                        "azureAdDeviceId": "@{body('Get_Alert_Details')?['evidence']?[0]?['azureAdDeviceId']}",
-                                        "osPlatform": "@{body('Get_Alert_Details')?['evidence']?[0]?['osPlatform']}",
-                                        "deviceDnsName": "@{body('Get_Alert_Details')?['evidence']?[0]?['deviceDnsName']}"
-                                    }
-                                }
-                            },
-                            "Append_to_ActiveAlerts": {
-                                "runAfter": {
-                                    "Append_to_ActiveEntities": [
-                                        "Succeeded"
-                                    ]
-                                },
-                                "type": "AppendToArrayVariable",
-                                "inputs": {
-                                    "name": "ActiveAlerts",
-                                    "value": "@first(variables('ActiveEntities'))"
-                                }
-                            }
-                        },
-                        "runAfter": {
-                            "Filter_Remediation": [
-                                "Succeeded"
-                            ]
-                        },
-                        "else": {
-                            "actions": {}
-                        },
-                        "expression": {
-                            "and": [
-                                {
-                                    "greater": [
-                                        "@length(body('Filter_Remediation'))",
-                                        0
-                                    ]
-                                }
-                            ]
-                        },
-                        "type": "If"
-                    }
-                },
-                "runAfter": {
-                    "Get_SP_Secret": [
-                        "Succeeded"
-                    ]
-                },
-                "type": "Foreach"
-            },
-            "Initialize_Variables": {
-                "runAfter": {
-                    "Get_incident": [
-                        "Succeeded"
-                    ]
-                },
-                "type": "InitializeVariable",
-                "inputs": {
-                    "variables": [
-                        {
-                            "name": "DeviceName",
-                            "type": "string"
-                        },
-                        {
-                            "name": "IsServer",
-                            "type": "boolean",
-                            "value": false
-                        },
-                        {
-                            "name": "TO",
-                            "type": "string",
-                            "value": "analyst@example.com"
-                        },
-                        {
-                            "name": "CC",
-                            "type": "string",
-                            "value": "analyst@example.com"
-                        },
-                        {
-                            "name": "SUBJECT",
-                            "type": "string",
-                            "value": "TEST EMAIL"
-                        },
-                        {
-                            "name": "BODY",
-                            "type": "string"
-                        },
-                        {
-                            "name": "MachineID",
-                            "type": "string"
-                        },
-                        {
-                            "name": "IsAfterHours",
-                            "type": "boolean",
-                            "value": false
-                        },
-                        {
-                            "name": "IsIsolated",
-                            "type": "boolean",
-                            "value": false
-                        },
-                        {
-                            "name": "OS Platform",
-                            "type": "string"
-                        },
-                        {
-                            "name": "Isolation Confirmed",
-                            "type": "boolean",
-                            "value": false
-                        },
-                        {
-                            "name": "AadDeviceID",
-                            "type": "string"
-                        },
-                        {
-                            "name": "ActiveEntities",
-                            "type": "array"
-                        },
-                        {
-                            "name": "ActiveAlerts",
-                            "type": "array"
-                        }
-                    ]
-                }
-            },
-            "Get_incident": {
-                "runAfter": {},
-                "type": "ApiConnection",
-                "inputs": {
-                    "host": {
-                        "connection": {
-                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                        }
-                    },
-                    "method": "post",
-                    "body": {
-                        "incidentArmId": "@triggerBody()?['object']?['id']"
-                    },
-                    "path": "/Incidents"
-                }
-            },
-            "Get_SP_Secret": {
-                "runAfter": {
-                    "Initialize_Variables": [
-                        "Succeeded"
-                    ]
-                },
-                "type": "ApiConnection",
-                "inputs": {
-                    "host": {
-                        "connection": {
-                            "name": "@parameters('$connections')['keyvault']['connectionId']"
-                        }
-                    },
-                    "method": "get",
-                    "path": "/secrets/@{encodeURIComponent('SECRET_NAME')}/value"
-                },
-                "runtimeConfiguration": {
-                    "secureData": {
-                        "properties": [
-                            "inputs",
-                            "outputs"
-                        ]
-                    }
-                }
-            },
-            "Summary_Agent": {
-                "runAfter": {
-                    "Compose_Alerts": [
-                        "Succeeded"
-                    ]
-                },
-                "limit": {
-                    "count": 100
-                },
-                "tools": {},
-                "type": "Agent",
-                "inputs": {
-                    "parameters": {
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": "A device, or multiple devices have just been isolated. \n\nYou have been given the list of devices that were isolated and a list of triggered alerts that caused the isolation of that device. Note, that because this processes has taken place, it means that it was determined that automatic remediation missed or did not \"prevent\" or \"block\" a process. So please summarize from the point of view of before isolation. Don't even mention the isolation that the current process took. You are writing a summary of why you isolated, so the fact that you took action or isolated is irrelevant. No bold or formatting allowed. You need to write a summary of that alert in only 1-2 lines. Do not return any conversational details, only return the 1-2 line summary. Please also include before the 1-2 line summary the name of the device for example:\n\nDEVICENAME.domain.com: XXXX \n\n### Device Names:\n@{union(variables('ActiveEntities'), variables('ActiveEntities'))}\n\n### Alerts:\n@{outputs('Compose_Alerts')}"
-                            }
-                        ],
-                        "agentModelType": "AzureOpenAI",
-                        "agentModelSettings": {
-                            "agentHistoryReductionSettings": {
-                                "agentHistoryReductionType": "maximumTokenCountReduction",
-                                "maximumTokenCount": 128000
-                            }
-                        },
-                        "modelId": "gpt-4o-mini"
-                    }
-                }
-            },
-            "Compose_Alerts": {
-                "runAfter": {
-                    "Compose_Incident_URL": [
-                        "Succeeded"
-                    ]
-                },
-                "type": "Compose",
-                "inputs": "@variables('ActiveAlerts')"
-            }
-        },
-        "outputs": {},
-        "parameters": {
-            "CLOSED_CONTROL": {
-                "defaultValue": true,
-                "type": "Bool"
-            },
-            "ISOLATE_CONTROL": {
-                "defaultValue": true,
-                "type": "Bool"
-            },
-            "EMAIL_CONTROL": {
-                "defaultValue": true,
-                "type": "Bool"
-            },
-            "PREVENTED_CONTROL": {
-                "defaultValue": true,
-                "type": "Bool"
-            },
-            "AFTERHOURS_CONTROL": {
-                "defaultValue": true,
-                "type": "Bool"
-            },
-            "SIMULATE_EMAIL": {
-                "defaultValue": 0,
-                "type": "Int"
-            },
-            "$connections": {
-                "type": "Object",
-                "defaultValue": {}
-            }
-        }
-    },
-    "parameters": {
-        "$connections": {
-            "type": "Object",
-            "value": {
-                "azuresentinel": {
-                    "id": "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Web/locations/northcentralus/managedApis/azuresentinel",
-                    "connectionId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/YOUR-RESOURCE-GROUP/providers/Microsoft.Web/connections/azuresentinel",
-                    "connectionName": "azuresentinel",
-                    "connectionProperties": {
-                        "authentication": {
-                            "type": "ManagedServiceIdentity"
-                        }
-                    }
-                },
-                "wdatp-1": {
-                    "id": "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Web/locations/northcentralus/managedApis/wdatp",
-                    "connectionId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/YOUR-RESOURCE-GROUP/providers/Microsoft.Web/connections/wdatp",
-                    "connectionName": "wdatp",
-                    "connectionProperties": {}
-                },
-                "wdatp": {
-                    "id": "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Web/locations/northcentralus/managedApis/wdatp",
-                    "connectionId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/YOUR-RESOURCE-GROUP/providers/Microsoft.Web/connections/wdatp",
-                    "connectionName": "wdatp",
-                    "connectionProperties": {}
-                },
-                "office365": {
-                    "id": "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Web/locations/northcentralus/managedApis/office365",
-                    "connectionId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/YOUR-RESOURCE-GROUP/providers/Microsoft.Web/connections/office365-2",
-                    "connectionName": "office365-2",
-                    "connectionProperties": {}
-                },
-                "office365-1": {
-                    "id": "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Web/locations/northcentralus/managedApis/office365",
-                    "connectionId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/YOUR-RESOURCE-GROUP/providers/Microsoft.Web/connections/office365-2",
-                    "connectionName": "office365-2",
-                    "connectionProperties": {}
-                },
-                "keyvault": {
-                    "id": "/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Web/locations/northcentralus/managedApis/keyvault",
-                    "connectionId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/YOUR-RESOURCE-GROUP/providers/Microsoft.Web/connections/keyvault-1",
-                    "connectionName": "keyvault-1",
-                    "connectionProperties": {
-                        "authentication": {
-                            "type": "ManagedServiceIdentity"
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+                                    "actions": {
+                                        "SUBJECT_[Not_Enabled]": { "type": "SetVariable", "inputs": { "name": "SUBJECT", "value": "Isolation Not Enabled" } },
+                                        "BODY_[Not_Enabled]": {
+                                            "type": "SetVariable",
+                                            "inputs": { "name": "BODY", "value": "This is a message from Security-Auto-Isolation. <b>Isolation is currently disabled, the test machine has been isolated as a test.</b> <i>fix that in the Logic App Parameters.</i> Thank you." },
+                                            "runAfter": { "SUBJECT_[Not_Enabled]": [ "Succeeded" ] }
+                                        },
+                                        "TO_analyst_[2]": {
+                                            "type": "SetVariable",
+                                            "inputs": { "name": "TO", "value": "analyst@example.com" },
+                                            "runAfter": { "BODY_[Not_Enabled]": [ "Succeeded" ] }
+                                        },
+                                        "CC_analyst_[2]": {
+                                            "type": "SetVariable",
+                                            "inputs": { "name": "CC", "value": "analyst@example.com" },
+                                            "runAfter": { "TO_analyst_[2]": [ "Succeeded" ] }
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "[2]_Server_at_Risk": {
+                                                "type": "If",
+                                                "expression": {
+                                                    "or": [
+                                                        {
+                                                            "and": [
+                                                                { "equals": [ "@variables('IsServer')", true ] },
+                                                                { "equals": [ "@variables('IsIsolated')", true ] }
+                                                            ]
+                                                        },
+                                                        { "equals": [ "@parameters('SIMULATE_EMAIL')", 3 ] }
+                                                    ]
+                                                },
+                                                "actions": {
+                                                    "SUBJECT_[Risk]": { "type": "SetVariable", "inputs": { "name": "SUBJECT", "value": "Server at Risk" } },
+                                                    "BODY_[Risk]": {
+                                                        "type": "SetVariable",
+                                                        "inputs": { "name": "BODY", "value": "Microsoft Security Controls have determined the following Server is at-risk or already compromised.\n \n<p style=\"color: #d0021b;\"><b>Analyst Actions Needed:</b><br>\nReview the referenced Incident / Alert<br>\nComplete remediation<br>\nNotify relevant SOC Group (if needed)<br>\nUpdate/Close Incident in Defender</p>" },
+                                                        "runAfter": { "SUBJECT_[Risk]": [ "Succeeded" ] }
+                                                    },
+                                                    "TO_[Risk]": {
+                                                        "type": "SetVariable",
+                                                        "inputs": { "name": "TO", "value": "soc@example.com" },
+                                                        "runAfter": { "BODY_[Risk]": [ "Succeeded" ] }
+                                                    },
+                                                    "CC_[Risk]": {
+                                                        "type": "SetVariable",
+                                                        "inputs": { "name": "CC", "value": "analyst@example.com,manager@example.com" },
+                                                        "runAfter": { "TO_[Risk]": [ "Succeeded" ] }
+                                                    }
+                                                },
+                                                "else": {
+                                                    "actions": {
+                                                        "[3]_Server_Has_Been_Disabled": {
+                                                            "type": "If",
+                                                            "expression": {
+                                                                "or": [
+                                                                    {
+                                                                        "and": [
+                                                                            { "equals": [ "@variables('IsIsolated')", false ] },
+                                                                            { "equals": [ "@variables('IsServer')", true ] }
+                                                                        ]
+                                                                    },
+                                                                    { "equals": [ "@parameters('SIMULATE_EMAIL')", 2 ] }
+                                                                ]
+                                                            },
+                                                            "actions": {
+                                                                "SUBJECT_[Server]": { "type": "SetVariable", "inputs": { "name": "SUBJECT", "value": "Server Has Been Isolated by Security AutoContain" } },
+                                                                "BODY_[Server]": {
+                                                                    "type": "SetVariable",
+                                                                    "inputs": { "name": "BODY", "value": "<b>SERVER ISOLATED</b><br
