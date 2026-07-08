@@ -18,89 +18,7 @@ This repository is structured as a monorepo, where each subfolder represents a s
 
 ## Library Directory
 
-### 1. [Context-Aware User Containment](./sentinel-user-disruption/)
-* **Primary Function:** Automated user profile lookup via Microsoft Graph and identity containment via a custom corporate Identity API.
-* **Key Features:**
-  * Dynamic active-hours logic parsing (8:00 AM – 8:00 PM CST evaluations).
-  * Automated **VIP/Executive Identity protection bypass loops** targeting high-profile roles (Chancellors, Presidents, C-Suite) to mitigate critical business downtime risks.
-  * Native ITSM ticketing integration for rapid service-desk handoffs.
-
-```mermaid
-flowchart TD
-    %% Trigger & Initialization
-    Trigger([Sentinel Incident Created]) --> StatusCheck{Is Incident Eligible?}
-    StatusCheck -->|No| Cancel([❌ Terminate Playbook])
-    StatusCheck -->|Yes| Init[Initialize Variables]
-
-    %% User Correlation
-    Init --> DiscoverUsers
-
-    subgraph DiscoverUsers [🔍 Identify the Correct User]
-        direction TB
-
-        CollectUsers[Extract Related User Entities]
-        CollectUsers --> Normalize[Normalize & Remove Duplicates]
-
-        Normalize --> SingleUser{Only One User Found?}
-
-        SingleUser -->|Yes| DirectMatch[Use Identified User]
-
-        SingleUser -->|No| QueryAlerts[Search Related Alerts]
-
-        subgraph WaitLoop [🔄 Do Until: Alert Data Available]
-            direction TB
-            SearchAlerts[Query Sentinel Alerts]
-            SearchAlerts --> AlertReady{Matching Alerts Found?}
-            AlertReady -->|No| Delay[Wait 30 Seconds]
-            Delay --> SearchAlerts
-        end
-
-        WaitLoop --> Correlate[Correlate Accounts to Alert Titles]
-        Correlate --> MatchFound{Unique Match Identified?}
-
-        MatchFound -->|Yes| SelectUser[Select Matching User]
-        MatchFound -->|No| CompareIncident[Compare Incident Alert Metadata]
-        CompareIncident --> SelectUser
-    end
-
-    %% Identity Processing
-    SelectUser --> IdentityLoop
-
-    subgraph IdentityLoop [🔁 Process Selected Account]
-        direction TB
-
-        GetProfile[Retrieve User & On-Prem Identity]
-        GetProfile --> BuildContext[Generate Incident Context]
-        BuildContext --> CheckHours[Determine Business Hours]
-        CheckHours --> CheckVIP[Determine VIP Status]
-
-        CheckVIP --> DisableGate{Should Account Be Automatically Disabled?}
-
-        DisableGate -->|Yes| DisableAccount[Disable Account & Reset Password]
-        DisableGate -->|No| NotifyVIP[Escalate VIP Without Disabling]
-    end
-
-    %% Notification Routing
-    DisableAccount --> EmailMode
-    NotifyVIP --> EmailMode
-
-    EmailMode{Production Notifications Enabled?}
-
-    EmailMode -->|Yes| ITSM[Create ITSM Recovery Ticket]
-    ITSM --> VIPRoute{VIP User?}
-    VIPRoute -->|Yes| ExecEmail[Notify Executive Recovery Team]
-    VIPRoute -->|No| SOCEmail[Notify SOC]
-
-    EmailMode -->|No| TestTicket[Test ITSM Ticket]
-    TestTicket --> TestEmail[Test SOC Notification]
-
-    %% Completion
-    ExecEmail --> Complete([✅ Playbook Complete])
-    SOCEmail --> Complete
-    TestEmail --> Complete
-```
-
-### 2. [Autonomous Device Isolation](./sentinel-device-isolation/)
+### 1. [Autonomous Device Isolation](./sentinel-device-isolation/)
 * **Primary Function:** Automated endpoint containment utilizing the Microsoft Defender for Endpoint (MDE) API.
 * **Key Features:**
   * Integrated **Azure OpenAI (`gpt-4o-mini`) agent** block running zero-shot synthesis to generate unformatted, 1-2 line natural language briefs for SOC analysts.
@@ -208,6 +126,88 @@ flowchart TD
     IsolateSuccessful -->|Yes| SendSocEmail[Send Final Status Notification Email]
     IsolateSuccessful -->|No| IsolationFailed[Log Failure Details to Audit History]
    ```
+
+### 2. [Context-Aware User Containment](./sentinel-user-disruption/)
+* **Primary Function:** Automated user profile lookup via Microsoft Graph and identity containment via a custom corporate Identity API.
+* **Key Features:**
+  * Dynamic active-hours logic parsing (8:00 AM – 8:00 PM CST evaluations).
+  * Automated **VIP/Executive Identity protection bypass loops** targeting high-profile roles (Chancellors, Presidents, C-Suite) to mitigate critical business downtime risks.
+  * Native ITSM ticketing integration for rapid service-desk handoffs.
+
+```mermaid
+flowchart TD
+    %% Trigger & Initialization
+    Trigger([Sentinel Incident Created]) --> StatusCheck{Is Incident Eligible?}
+    StatusCheck -->|No| Cancel([❌ Terminate Playbook])
+    StatusCheck -->|Yes| Init[Initialize Variables]
+
+    %% User Correlation
+    Init --> DiscoverUsers
+
+    subgraph DiscoverUsers [🔍 Identify the Correct User]
+        direction TB
+
+        CollectUsers[Extract Related User Entities]
+        CollectUsers --> Normalize[Normalize & Remove Duplicates]
+
+        Normalize --> SingleUser{Only One User Found?}
+
+        SingleUser -->|Yes| DirectMatch[Use Identified User]
+
+        SingleUser -->|No| QueryAlerts[Search Related Alerts]
+
+        subgraph WaitLoop [🔄 Do Until: Alert Data Available]
+            direction TB
+            SearchAlerts[Query Sentinel Alerts]
+            SearchAlerts --> AlertReady{Matching Alerts Found?}
+            AlertReady -->|No| Delay[Wait 30 Seconds]
+            Delay --> SearchAlerts
+        end
+
+        WaitLoop --> Correlate[Correlate Accounts to Alert Titles]
+        Correlate --> MatchFound{Unique Match Identified?}
+
+        MatchFound -->|Yes| SelectUser[Select Matching User]
+        MatchFound -->|No| CompareIncident[Compare Incident Alert Metadata]
+        CompareIncident --> SelectUser
+    end
+
+    %% Identity Processing
+    SelectUser --> IdentityLoop
+
+    subgraph IdentityLoop [🔁 Process Selected Account]
+        direction TB
+
+        GetProfile[Retrieve User & On-Prem Identity]
+        GetProfile --> BuildContext[Generate Incident Context]
+        BuildContext --> CheckHours[Determine Business Hours]
+        CheckHours --> CheckVIP[Determine VIP Status]
+
+        CheckVIP --> DisableGate{Should Account Be Automatically Disabled?}
+
+        DisableGate -->|Yes| DisableAccount[Disable Account & Reset Password]
+        DisableGate -->|No| NotifyVIP[Escalate VIP Without Disabling]
+    end
+
+    %% Notification Routing
+    DisableAccount --> EmailMode
+    NotifyVIP --> EmailMode
+
+    EmailMode{Production Notifications Enabled?}
+
+    EmailMode -->|Yes| ITSM[Create ITSM Recovery Ticket]
+    ITSM --> VIPRoute{VIP User?}
+    VIPRoute -->|Yes| ExecEmail[Notify Executive Recovery Team]
+    VIPRoute -->|No| SOCEmail[Notify SOC]
+
+    EmailMode -->|No| TestTicket[Test ITSM Ticket]
+    TestTicket --> TestEmail[Test SOC Notification]
+
+    %% Completion
+    ExecEmail --> Complete([✅ Playbook Complete])
+    SOCEmail --> Complete
+    TestEmail --> Complete
+```
 
 ---
 
