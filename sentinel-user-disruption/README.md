@@ -28,8 +28,8 @@ This playbook produces:
 
 ### Trigger
 
-- `deploy/automation-rules/sentinel-on-creation.json` fires when a new incident is created and the incident title contains one of the configured high-fidelity keywords.
-- `deploy/automation-rules/sentinel-on-update.json` fires when an existing incident is updated with new alerts and the incident title contains one of the same keyword values.
+- [`deploy/automation-rules/sentinel-on-creation.json`](deploy/automation-rules/sentinel-on-creation.json) fires when a new incident is created and the incident title contains one of the configured high-fidelity keywords.
+- [`deploy/automation-rules/sentinel-on-update.json`](deploy/automation-rules/sentinel-on-update.json) fires when an existing incident is updated with new alerts and the incident title contains one of the same keyword values.
 
 ### Incident and Account Resolution
 
