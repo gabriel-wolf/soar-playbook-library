@@ -18,7 +18,7 @@ This repository is structured as a monorepo, where each subfolder represents a s
 
 ## Library Directory
 
-### 1. [Context-Aware User Disruption](./sentinel-user-disruption/)
+### 1. [Context-Aware User Containment](./sentinel-user-disruption/)
 * **Primary Function:** Automated user profile lookup via Microsoft Graph and identity containment via a custom corporate Identity API.
 * **Key Features:**
   * Dynamic active-hours logic parsing (8:00 AM – 8:00 PM CST evaluations).
