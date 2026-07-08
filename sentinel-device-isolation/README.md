@@ -12,17 +12,6 @@ An advanced Azure Logic App playbook that automatically isolates compromised dev
 - Confirms isolation completion through MDE machine action polling.
 - Sends SOC notification emails based on outcome, asset classification, and business hours.
 
-## Notification Behavior
-
-When the playbook runs, it generates SOC-facing notifications that include:
-
-- affected device details and alert context
-- isolation outcome and confirmation status
-- AI-generated behavioral summary
-- a Sentinel incident link for analyst follow-up
-
-![SOC Device Email Notification](../imgs/soc-device-email-notification.png)
-
 ## Workflow Architecture
 
 ### Trigger
@@ -130,7 +119,20 @@ flowchart TD
     IsolateSuccessful -->|Yes| SendSocEmail[Send Final Status Notification Email]
     IsolateSuccessful -->|No| IsolationFailed[Log Failure Details to Audit History]
    ```
-   
+
+
+## Notification Behavior
+
+When the playbook runs, it generates SOC-facing notifications that include:
+
+- affected device details and alert context
+- isolation outcome and confirmation status
+- AI-generated behavioral summary
+- a Sentinel incident link for analyst follow-up
+
+![SOC Device Email Notification](../imgs/soc-device-email-notification.png)
+
+
 ## Required Connections and Permissions
 
 ### Azure Logic App Connections

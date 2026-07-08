@@ -12,6 +12,89 @@ An enterprise-grade Azure Logic App playbook that automatically responds to high
 - Sends elevated VIP notifications to executive and SOC distribution lists.
 - Supports safe test mode via `DisableInProduction` and `SendProductionEmail` runtime flags.
 
+
+## Workflow Architecture
+
+### Trigger
+
+- [`deploy/automation-rules/sentinel-on-creation.json`](deploy/automation-rules/sentinel-on-creation.json) fires on incident creation when the title matches one of the configured high-fidelity keywords.
+- [`deploy/automation-rules/sentinel-on-update.json`](deploy/automation-rules/sentinel-on-update.json) fires on incident update when new alerts are added and the title matches one of the configured keywords.
+
+```mermaid
+flowchart TD
+    %% Trigger & Initialization
+    Trigger([Sentinel Incident Created]) --> StatusCheck{Is Incident Eligible?}
+    StatusCheck -->|No| Cancel([❌ Terminate Playbook])
+    StatusCheck -->|Yes| Init[Initialize Variables]
+
+    %% User Correlation
+    Init --> DiscoverUsers
+
+    subgraph DiscoverUsers [🔍 Identify the Correct User]
+        direction TB
+
+        CollectUsers[Extract Related User Entities]
+        CollectUsers --> Normalize[Normalize & Remove Duplicates]
+
+        Normalize --> SingleUser{Only One User Found?}
+
+        SingleUser -->|Yes| DirectMatch[Use Identified User]
+
+        SingleUser -->|No| QueryAlerts[Search Related Alerts]
+
+        subgraph WaitLoop [🔄 Do Until: Alert Data Available]
+            direction TB
+            SearchAlerts[Query Sentinel Alerts]
+            SearchAlerts --> AlertReady{Matching Alerts Found?}
+            AlertReady -->|No| Delay[Wait 30 Seconds]
+            Delay --> SearchAlerts
+        end
+
+        WaitLoop --> Correlate[Correlate Accounts to Alert Titles]
+        Correlate --> MatchFound{Unique Match Identified?}
+
+        MatchFound -->|Yes| SelectUser[Select Matching User]
+        MatchFound -->|No| CompareIncident[Compare Incident Alert Metadata]
+        CompareIncident --> SelectUser
+    end
+
+    %% Identity Processing
+    SelectUser --> IdentityLoop
+
+    subgraph IdentityLoop [🔁 Process Selected Account]
+        direction TB
+
+        GetProfile[Retrieve User & On-Prem Identity]
+        GetProfile --> BuildContext[Generate Incident Context]
+        BuildContext --> CheckHours[Determine Business Hours]
+        CheckHours --> CheckVIP[Determine VIP Status]
+
+        CheckVIP --> DisableGate{Should Account Be Automatically Disabled?}
+
+        DisableGate -->|Yes| DisableAccount[Disable Account & Reset Password]
+        DisableGate -->|No| NotifyVIP[Escalate VIP Without Disabling]
+    end
+
+    %% Notification Routing
+    DisableAccount --> EmailMode
+    NotifyVIP --> EmailMode
+
+    EmailMode{Production Notifications Enabled?}
+
+    EmailMode -->|Yes| ITSM[Create ITSM Recovery Ticket]
+    ITSM --> VIPRoute{VIP User?}
+    VIPRoute -->|Yes| ExecEmail[Notify Executive Recovery Team]
+    VIPRoute -->|No| SOCEmail[Notify SOC]
+
+    EmailMode -->|No| TestTicket[Test ITSM Ticket]
+    TestTicket --> TestEmail[Test SOC Notification]
+
+    %% Completion
+    ExecEmail --> Complete([✅ Playbook Complete])
+    SOCEmail --> Complete
+    TestEmail --> Complete
+```
+
 ## Notification Behavior
 
 When the playbook runs, it generates contextual incident notifications that include:
@@ -22,37 +105,6 @@ When the playbook runs, it generates contextual incident notifications that incl
 - Escalation instructions for VIP accounts
 
 ![SOC Email Notification](../imgs/soc-email-notification.png)
-
-## Workflow Architecture
-
-### Trigger
-
-- [`deploy/automation-rules/sentinel-on-creation.json`](deploy/automation-rules/sentinel-on-creation.json) fires on incident creation when the title matches one of the configured high-fidelity keywords.
-- [`deploy/automation-rules/sentinel-on-update.json`](deploy/automation-rules/sentinel-on-update.json) fires on incident update when new alerts are added and the title matches one of the configured keywords.
-
-### User Resolution
-
-- The Logic App iterates through matched accounts in the incident.
-- It calls Microsoft Graph to retrieve the user object and on-premises identity details.
-- It composes a Sentinel incident URL for email summaries.
-
-### VIP & Business Hours Evaluation
-
-- The workflow checks `jobTitle` values for executive indicators.
-- It evaluates local time in Central Standard Time (`8:00 AM` to `8:00 PM` CST) to determine a workday condition.
-- VIP users may receive different escalation behavior than standard accounts.
-
-### Account Disablement
-
-- When allowed, the playbook calls a custom identity API endpoint to disable the account and pre-expire the password.
-- If `DisableInProduction` is `false`, the workflow uses a test branch instead of disabling production accounts.
-
-### Email Notification Paths
-
-- Standard account containment sends ITSM and SOC notifications.
-- VIP containment sends senior/executive alerts to `executiveEmailRecipients`.
-- `SendProductionEmail` controls whether production emails are sent.
-- In test mode, the playbook sends internal test emails instead of real production messages.
 
 ## Required Connections and Permissions
 

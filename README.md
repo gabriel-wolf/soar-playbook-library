@@ -25,6 +25,81 @@ This repository is structured as a monorepo, where each subfolder represents a s
   * Automated **VIP/Executive Identity protection bypass loops** targeting high-profile roles (Chancellors, Presidents, C-Suite) to mitigate critical business downtime risks.
   * Native ITSM ticketing integration for rapid service-desk handoffs.
 
+```mermaid
+flowchart TD
+    %% Trigger & Initialization
+    Trigger([Sentinel Incident Created]) --> StatusCheck{Is Incident Eligible?}
+    StatusCheck -->|No| Cancel([❌ Terminate Playbook])
+    StatusCheck -->|Yes| Init[Initialize Variables]
+
+    %% User Correlation
+    Init --> DiscoverUsers
+
+    subgraph DiscoverUsers [🔍 Identify the Correct User]
+        direction TB
+
+        CollectUsers[Extract Related User Entities]
+        CollectUsers --> Normalize[Normalize & Remove Duplicates]
+
+        Normalize --> SingleUser{Only One User Found?}
+
+        SingleUser -->|Yes| DirectMatch[Use Identified User]
+
+        SingleUser -->|No| QueryAlerts[Search Related Alerts]
+
+        subgraph WaitLoop [🔄 Do Until: Alert Data Available]
+            direction TB
+            SearchAlerts[Query Sentinel Alerts]
+            SearchAlerts --> AlertReady{Matching Alerts Found?}
+            AlertReady -->|No| Delay[Wait 30 Seconds]
+            Delay --> SearchAlerts
+        end
+
+        WaitLoop --> Correlate[Correlate Accounts to Alert Titles]
+        Correlate --> MatchFound{Unique Match Identified?}
+
+        MatchFound -->|Yes| SelectUser[Select Matching User]
+        MatchFound -->|No| CompareIncident[Compare Incident Alert Metadata]
+        CompareIncident --> SelectUser
+    end
+
+    %% Identity Processing
+    SelectUser --> IdentityLoop
+
+    subgraph IdentityLoop [🔁 Process Selected Account]
+        direction TB
+
+        GetProfile[Retrieve User & On-Prem Identity]
+        GetProfile --> BuildContext[Generate Incident Context]
+        BuildContext --> CheckHours[Determine Business Hours]
+        CheckHours --> CheckVIP[Determine VIP Status]
+
+        CheckVIP --> DisableGate{Should Account Be Automatically Disabled?}
+
+        DisableGate -->|Yes| DisableAccount[Disable Account & Reset Password]
+        DisableGate -->|No| NotifyVIP[Escalate VIP Without Disabling]
+    end
+
+    %% Notification Routing
+    DisableAccount --> EmailMode
+    NotifyVIP --> EmailMode
+
+    EmailMode{Production Notifications Enabled?}
+
+    EmailMode -->|Yes| ITSM[Create ITSM Recovery Ticket]
+    ITSM --> VIPRoute{VIP User?}
+    VIPRoute -->|Yes| ExecEmail[Notify Executive Recovery Team]
+    VIPRoute -->|No| SOCEmail[Notify SOC]
+
+    EmailMode -->|No| TestTicket[Test ITSM Ticket]
+    TestTicket --> TestEmail[Test SOC Notification]
+
+    %% Completion
+    ExecEmail --> Complete([✅ Playbook Complete])
+    SOCEmail --> Complete
+    TestEmail --> Complete
+```
+
 ### 2. [Autonomous Device Isolation](./sentinel-device-isolation/)
 * **Primary Function:** Automated endpoint containment utilizing the Microsoft Defender for Endpoint (MDE) API.
 * **Key Features:**
@@ -32,6 +107,107 @@ This repository is structured as a monorepo, where each subfolder represents a s
   * Pre-containment state evaluation checking for pre-existing system blocking mechanisms (`Prevented Control`) to reduce unnecessary disruptions.
   * Automatic system classification loops separating standard workstations from mission-critical servers (`Server` / `Linux`).
   * An asynchronous verification engine (`Until` loop) polling the MDE machine actions API every 60 seconds to guarantee confirmation of isolation on the wire.
+
+
+
+```mermaid
+flowchart TD
+    %% Triggers & Initialization
+    Trigger([Sentinel Incident Created]) --> GetIncident[Get Incident Details]
+    GetIncident --> InitVars[Initialize Variables]
+    InitVars --> GetSecret[Get API Authentication Credentials]
+
+    %% Alert Processing Loop
+    GetSecret --> ForEachAlertBlock
+    
+    subgraph ForEachAlertBlock [🔁 For Each Alert in Incident]
+        direction TB
+        GetAlertDetails[Get Security Alert Details] --> FilterRemediation{Is Alert<br>Still Active?}
+        FilterRemediation -->|Yes| AppendLists[Add to Active Alerts List]
+        FilterRemediation -->|No| SkipAlert[Skip Alert]
+    end
+
+    %% Control Gates
+    ForEachAlertBlock --> ClosedControl{Is Incident Already Closed?}
+    ClosedControl -->|Yes| TerminateClosed([❌ Terminate Playbook])
+    
+    ClosedControl -->|No| PreventedControl{Was Attack Automatically Blocked?}
+    PreventedControl -->|Yes| TerminatePrevented([❌ Terminate Playbook])
+
+    %% Data Preparation
+    PreventedControl -->|No| ComposeIncidentURL[Generate Portal Links]
+    ComposeIncidentURL --> ComposeAlerts[Compile Alert Data]
+    ComposeAlerts --> SummaryAgent[Generate AI Summary of Incident]
+
+    %% Host Isolation Loop
+    SummaryAgent --> ForEachHostBlock
+
+    subgraph ForEachHostBlock [🔁 For Each Unique Host]
+        direction TB
+        CheckHours[Check if Outside Business Hours] --> SetIDs[Identify Target Machine]
+        SetIDs --> GetMachine[Get Device Details]
+        GetMachine --> CheckOS{Check OS Type}
+        
+        CheckOS -->|Server / Linux| SetServerTrue[Mark as Server]
+        CheckOS -->|Workstation| SetServerFalse[Mark as Workstation]
+        
+        SetServerTrue & SetServerFalse --> IsolationLogic{Should Device Be Isolated?}
+        
+        %% Isolation Actions
+        IsolationLogic -->|Yes| IsolateMachine[Trigger Network Isolation]
+        IsolateMachine --> TagIncident[Add 'AUTOCONTAIN' Tag to Incident]
+        
+        %% Do-Until Loop Structure
+        TagIncident --> DoUntilBlock
+        
+        subgraph DoUntilBlock [🔄 Do Until: Isolation Status Confirmed]
+            direction TB
+            Delay5[Wait 5 Seconds] --> GetIsolateStatus[Check Isolation Progress]
+            GetIsolateStatus --> EvalCondition{Is Device Isolated<br>OR 1 Hour Timeout?}
+            EvalCondition -->|No| Delay5
+        end
+        
+        %% Simulation / Fallback Path
+        IsolationLogic -->|No| TestBoxFallback[Route to Test Sandbox Group]
+    end
+
+    %% Nested Notification Branching Tree
+    ForEachHostBlock --> Gate1{"Is Isolation Feature Disabled?"}
+    
+    %% Condition 1: True
+    Gate1 -->|True| SetVars1[Draft Notification:<br>Feature Disabled]
+    SetVars1 --> SetToCc1[Route to On-Call Analyst]
+    
+    %% Condition 1: False -> Leads to Gate 2
+    Gate1 -->|False| Gate2{"Is Critical Server at Risk?"}
+    
+    %% Condition 2: True
+    Gate2 -->|True| SetVars2[Draft Alert:<br>Server at Risk]
+    SetVars2 --> SetToCc2[Route to Emergency SOC Team]
+    
+    %% Condition 2: False -> Leads to Gate 3
+    Gate2 -->|False| Gate3{"Was a Server Isolated?"}
+    
+    %% Condition 3: True
+    Gate3 -->|True| SetVars3[Draft Update:<br>Server Isolated]
+    SetVars3 --> SetToCc3[Route to Server Infrastructure Team]
+    
+    %% Condition 3: False -> Leads to Gate 4
+    Gate3 -->|False| Gate4{"Was a Workstation Isolated?"}
+    Gate4 -->|True| SetVars4[Draft Update:<br>Workstation Isolated]
+    SetVars4 --> SetToCc4[Route to Desktop Support Team]
+    Gate4 -->|False| SkipNotifications[Do Nothing]
+
+    %% Reconverging into Email Control Switch
+    SetToCc1 & SetToCc2 & SetToCc3 & SetToCc4 & SkipNotifications --> EmailControl{"Is Notification Override Active?"}
+    EmailControl -->|No| DoNothing[Use Default Team Routing]
+    EmailControl -->|Yes| OverrideRouting[Redirect All Emails to Admin Inbox]
+
+    %% Final Isolation Verification Step
+    OverrideRouting & DoNothing --> IsolateSuccessful{"Did Isolation Succeed?"}
+    IsolateSuccessful -->|Yes| SendSocEmail[Send Final Status Notification Email]
+    IsolateSuccessful -->|No| IsolationFailed[Log Failure Details to Audit History]
+   ```
 
 ---
 
