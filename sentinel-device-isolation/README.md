@@ -19,7 +19,11 @@ An advanced Azure Logic App playbook that automatically isolates compromised dev
 - [`deploy/automation-rules/sentinel-on-creation.json`](deploy/automation-rules/sentinel-on-creation.json) fires on incident creation when the title matches configured trigger keywords.
 - [`deploy/automation-rules/sentinel-on-update.json`](deploy/automation-rules/sentinel-on-update.json) fires on incident update when new alerts are added and the title matches configured trigger keywords.
 
+
+
 ### Simplified Logic App Flowchart
+- [`deploy/logic-app/workflow.json`](deploy/logic-app/workflow.json) the full Logic App workflow for importing.
+
 
 ```mermaid
 flowchart TD
