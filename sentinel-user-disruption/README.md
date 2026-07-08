@@ -1,4 +1,4 @@
-# Automated Incident Disruption: Context-Aware User Containment
+# Automated Incident Response: Context-Aware User Containment
 
 An enterprise-grade Azure Logic App playbook that automatically responds to high-fidelity Sentinel incidents by disabling at-risk user accounts, generating ITSM tickets, and routing urgent executive notifications for VIP accounts.
 
@@ -6,78 +6,76 @@ An enterprise-grade Azure Logic App playbook that automatically responds to high
 
 - Triggers from Microsoft Sentinel incident creation or incident updates.
 - Resolves account details using Microsoft Graph via Managed Service Identity.
-- Detects VIP users based on `jobTitle` values such as `Chancellor`, `Provost`, `President`, `CIO`, `CFO`, `CMO`, `COO`.
+- Detects VIP users based on configured executive job titles.
 - Applies automated account disablement through a custom Identity API call.
-- Sends structured ITSM ticketing email notifications for standard users.
-- Sends elevated VIP notification emails to executive and SOC distribution lists.
-- Supports safe test mode via the `DisableInProduction` and `SendProductionEmail` runtime flags.
+- Sends structured ITSM ticket notifications for standard users.
+- Sends elevated VIP notifications to executive and SOC distribution lists.
+- Supports safe test mode via `DisableInProduction` and `SendProductionEmail` runtime flags.
 
-## Notification & Response Behavior
+## Notification Behavior
 
-This playbook produces:
+When the playbook runs, it generates contextual incident notifications that include:
 
-- A high-priority ITSM email to `itsmEmailRecipient` when a standard compromised account is disabled.
-- A SOC notification to `socEmailRecipient` for account containment actions.
-- A VIP escalation email to `executiveEmailRecipients` when the target account matches the VIP criteria.
-- A separate test-mode email path when runtime production guards are disabled.
+- User identity details (display name, UPN, sAMAccountName, job title)
+- Containment status and audit context
+- ITSM ticket creation and account recovery guidance
+- Escalation instructions for VIP accounts
 
 ![SOC Email Notification](../imgs/soc-email-notification.png)
-
 
 ## Workflow Architecture
 
 ### Trigger
 
-- [`deploy/automation-rules/sentinel-on-creation.json`](deploy/automation-rules/sentinel-on-creation.json) fires when a new incident is created and the incident title contains one of the configured high-fidelity keywords.
-- [`deploy/automation-rules/sentinel-on-update.json`](deploy/automation-rules/sentinel-on-update.json) fires when an existing incident is updated with new alerts and the incident title contains one of the same keyword values.
+- `deploy/automation-rules/sentinel-on-creation.json` fires on incident creation when the title matches one of the configured high-fidelity keywords.
+- `deploy/automation-rules/sentinel-on-update.json` fires on incident update when new alerts are added and the title matches one of the configured keywords.
 
-### Incident and Account Resolution
+### User Resolution
 
-- The Logic App processes each matched account via `For_Each_Account`.
-- It calls Microsoft Graph to fetch the user object and `onPremisesSamAccountName`/`onPremisesUserPrincipalName` details.
-- It then composes a direct incident link to Sentinel for contextual email summaries.
+- The Logic App iterates through matched accounts in the incident.
+- It calls Microsoft Graph to retrieve the user object and on-premises identity details.
+- It composes a Sentinel incident URL for email summaries.
 
-### VIP Detection & Business Hours
+### VIP & Business Hours Evaluation
 
-- The workflow evaluates whether the user is a VIP by checking the Graph `jobTitle` for executive keywords.
-- It also checks whether the current time is within business hours using Central Standard Time (`8:00 AM` to `8:00 PM` CST).
-- VIP accounts are handled with elevated notifications and may be routed for hands-on review instead of broad automated disabling.
+- The workflow checks `jobTitle` values for executive indicators.
+- It evaluates local time in Central Standard Time (`8:00 AM` to `8:00 PM` CST) to determine a workday condition.
+- VIP users may receive different escalation behavior than standard accounts.
 
 ### Account Disablement
 
-- When appropriate, the workflow calls a custom identity API endpoint to disable the account and pre-expire the password.
-- Production disablement occurs when `DisableInProduction` is `true`.
-- If `DisableInProduction` is `false`, the workflow enters a test branch that sends test-mode email notifications instead of disabling production accounts.
+- When allowed, the playbook calls a custom identity API endpoint to disable the account and pre-expire the password.
+- If `DisableInProduction` is `false`, the workflow uses a test branch instead of disabling production accounts.
 
 ### Email Notification Paths
 
-- **Standard account containment:** sends an ITSM ticket email to `itsmEmailRecipient` and a SOC notification to `socEmailRecipient`.
-- **VIP containment:** sends a high-priority executive notification to `executiveEmailRecipients`, with the same security details and analyst action guidance.
-- **Production email gating:** only sends email notifications when `SendProductionEmail` is `true`.
-- **Test mode:** sends test emails to fixed internal test addresses rather than production recipients.
+- Standard account containment sends ITSM and SOC notifications.
+- VIP containment sends senior/executive alerts to `executiveEmailRecipients`.
+- `SendProductionEmail` controls whether production emails are sent.
+- In test mode, the playbook sends internal test emails instead of real production messages.
 
 ## Required Connections and Permissions
 
 ### Azure Logic App Connections
 
-- `azuresentinel` - incident trigger and incident update control
+- `azuresentinel` - incident trigger and incident update handling
 - `office365` - sending email notifications
 - `keyvault` - retrieving the Identity API token secret
 
 ### Azure Managed Identity
 
-The workflow uses Managed Service Identity to authenticate to Microsoft Graph for user lookups.
+The playbook uses the Logic App system-assigned managed identity to authenticate to Microsoft Graph.
 
 ### Key Vault Secret
 
-- The Logic App retrieves `IdentityAPI` from Key Vault.
-- Grant the Logic App managed identity `Get` permission on the Key Vault secret.
+- The workflow retrieves `IdentityAPI` from Key Vault.
+- Grant the Logic App managed identity `Get` permission for the Key Vault secret.
 
 ## Deployment Files
 
-- [`deploy/logic-app/workflow.json`](deploy/logic-app/workflow.json)
-- [`deploy/automation-rules/sentinel-on-creation.json`](deploy/automation-rules/sentinel-on-creation.json)
-- [`deploy/automation-rules/sentinel-on-update.json`](deploy/automation-rules/sentinel-on-update.json)
+- `deploy/logic-app/workflow.json`
+- `deploy/automation-rules/sentinel-on-creation.json`
+- `deploy/automation-rules/sentinel-on-update.json`
 
 ## Deployment Parameters
 
@@ -85,27 +83,27 @@ The workflow uses Managed Service Identity to authenticate to Microsoft Graph fo
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `logicAppName` | String | `AutoIsolate-Playbook` | Name of the Logic App workflow resource |
-| `location` | String | `[resourceGroup().location]` | Azure region for deployment |
-| `itsmEmailRecipient` | String | `itsupport@contoso.com` | ITSM ticket email recipient |
-| `socEmailRecipient` | String | `soc@contoso.com` | SOC alert email recipient |
-| `executiveEmailRecipients` | String | `soc@contoso.com,soc-manager@contoso.com,ciso@contoso.com` | Comma-separated VIP notification recipients |
+| `logicAppName` | String | `AutoIsolate-Playbook` | Name of the Logic App resource |
+| `location` | String | `[resourceGroup().location]` | Azure deployment region |
+| `itsmEmailRecipient` | String | `itsupport@contoso.com` | ITSM ticket recipient |
+| `socEmailRecipient` | String | `soc@contoso.com` | SOC alert recipient |
+| `executiveEmailRecipients` | String | `soc@contoso.com,soc-manager@contoso.com,ciso@contoso.com` | VIP notification recipients |
 
 ### Logic App Runtime Parameters
 
 | Parameter | Type | Default | Purpose |
 |---|---|---|---|
-| `DisableInProduction` | Bool | `true` | Enables production account disablement path |
+| `DisableInProduction` | Bool | `true` | Enables production account disablement |
 | `SendProductionEmail` | Bool | `true` | Enables production email notifications |
-| `DISABLE` | String | `Active` | Indicates the active deployment mode for the playbook |
+| `DISABLE` | String | `Active` | Indicates active deployment mode |
 
 ### Automation Rule Parameters
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `workspaceName` | String | none | Sentinel Log Analytics workspace name |
-| `subscriptionId` | String | `[subscription().subscriptionId]` | Azure subscription where the Logic App resides |
-| `resourceGroupName` | String | none | Resource group containing the target Logic App |
+| `subscriptionId` | String | `[subscription().subscriptionId]` | Azure subscription containing the Logic App |
+| `resourceGroupName` | String | none | Resource group containing the Logic App |
 | `logicAppName` | String | `AutoContain-Playbook` | Target Logic App workflow name |
 | `highFidelityIncidentKeywords` | Array | See defaults below | Incident titles that trigger automation |
 
@@ -118,10 +116,9 @@ The workflow uses Managed Service Identity to authenticate to Microsoft Graph fo
 
 ## Automation Rule Behavior
 
-- `sentinel-on-creation.json` triggers immediately when a new incident is created and the title contains one of the configured keywords.
-- `sentinel-on-update.json` triggers when an incident is updated and a new alert is added, provided the title contains one of the configured keywords.
-
-Both rules execute the same `AutoContain-Playbook` Logic App.
+- `sentinel-on-creation.json` triggers when a matching incident is created.
+- `sentinel-on-update.json` triggers when a matching incident is updated with new alerts.
+- Both rules run the same Logic App workflow.
 
 ## Deployment Example
 
@@ -155,14 +152,14 @@ az deployment group create \
 
 ## Monitoring & Troubleshooting
 
-- Check Logic App run history for failure details in `For_Each_Account`, Graph API calls, or the identity disable step.
-- Verify the `keyvault` connection can retrieve the `IdentityAPI` secret and that the Logic App managed identity has `Get` permissions.
-- Confirm the `office365` connection is authorized and able to send mail.
-- If disabling is not occurring, confirm `DisableInProduction` is set to `true` and that the workflow is not in the test branch.
-- If email is not delivered, confirm `SendProductionEmail` is `true` and the recipients are configured correctly.
+- Review Logic App run history for failures in `For_Each_Account`, Graph API calls, or the identity disablement steps.
+- Confirm the `keyvault` connection can retrieve the `IdentityAPI` secret.
+- Ensure the `office365` connection is authorized and can send mail.
+- If account disablement does not occur, verify `DisableInProduction` is `true`.
+- If emails do not send, verify `SendProductionEmail` is `true`.
 
 ## Notes
 
-- This playbook uses Central Standard Time for business-hours evaluation.
-- The VIP detection logic is driven from `jobTitle` values and may need to be adapted to match your organization’s executive naming conventions.
-- The account containment API endpoint is currently hard-coded to `https://api.contoso.com/identity/user/.../Account`; update this to your identity service endpoint during deployment.
+- This playbook evaluates business hours in Central Standard Time.
+- VIP detection is based on `jobTitle` matching and may need customization.
+- Update the account containment endpoint from `https://api.contoso.com/identity/user/.../Account` to your production API endpoint.

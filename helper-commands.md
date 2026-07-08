@@ -31,42 +31,42 @@ Get-AzOperationalInsightsWorkspace | Format-Table Name, ResourceGroupName, Locat
 These validation commands run pre-flight structural checks against your ARM template files. They evaluate internal expressions, bracket alignment, parameter mapping, and schema compliance directly against Azure's template processing engine without spinning up live billing resources or modifying system states.
 
 ### Validate "On Creation" Automation Rule
-Run this block from your local ./deploy/automation-rules/ folder context to validate the high-fidelity incident creation automation template syntax.
+Run this block from each playbook's root directory to validate the high-fidelity incident creation automation template syntax.
 
 ```powershell
 Test-AzResourceGroupDeployment `
-  -ResourceGroupName "RG-NAME" `
-  -TemplateFile "sentinel-on-creation.json" `
+  -ResourceGroupName "<your-rg-name>" `
+  -TemplateFile "./deploy/automation-rules/sentinel-on-creation.json" `
   -TemplateParameterObject @{
-     workspaceName     = "WORKSPACE-NAME"
-     resourceGroupName = "RG-NAME"
-     logicAppName      = "LOGIC-APP-NAME"
+     workspaceName     = "<your-workspace-name>"
+     resourceGroupName = "<your-rg-name>"
+     logicAppName      = "<your-logic-app-name>"
   }
   ```
 
 ### Validate "On Update" Automation Rule
-Run this block from your local ./deploy/automation-rules/ folder context to validate the updated incident automation template structure.
+Run this block from each playbook's root directory to validate the updated incident automation template structure.
 
 ```powershell
 Test-AzResourceGroupDeployment `
-  -ResourceGroupName "RG-NAME" `
-  -TemplateFile "./sentinel-on-update.json" `
+  -ResourceGroupName "<your-rg-name>" `
+  -TemplateFile "./deploy/automation-rules/sentinel-on-update.json" `
   -TemplateParameterObject @{
-     workspaceName     = "WORKSPACE-NAME"
-     resourceGroupName = "RG-NAME"
-     logicAppName      = "LOGIC-APP-NAME"
+     workspaceName     = "<your-workspace-name>"
+     resourceGroupName = "<your-rg-name>"
+     logicAppName      = "<your-logic-app-name>"
   }
   ```
 
 ### Validate Playbook Workflow Template
-Run this block from your local ./deploy/logic-app/ folder context to validate the complete SOAR logic workflow envelope structure.
+Run this block from each playbook's root directory to validate the complete SOAR logic workflow envelope structure.
 
 ```powershell
 Test-AzResourceGroupDeployment `
-  -ResourceGroupName "RG-NAME" `
-  -TemplateFile "./workflow.json" `
+  -ResourceGroupName "<your-rg-name>" `
+  -TemplateFile "./deploy/logic-app/workflow.json" `
   -TemplateParameterObject @{
-     logicAppName             = "LOGIC-APP-NAME"
+     logicAppName             = "<your-logic-app-name>"
      itsmEmailRecipient       = "itsupport@contoso.com"
      socEmailRecipient        = "soc@contoso.com"
      executiveEmailRecipients = "soc@contoso.com,soc-manager@contoso.com,ciso@contoso.com"
