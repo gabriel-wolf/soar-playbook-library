@@ -22,7 +22,7 @@ An advanced Azure Logic App playbook that automatically isolates compromised dev
 
 
 ### Simplified Logic App Flowchart
-- [`deploy/logic-app/workflow.json`](deploy/logic-app/workflow.json) the full Logic App workflow for importing.
+- [`deploy/logic-app/workflow.json`](deploy/logic-app/workflow.json) the full Logic App workflow.
 
 
 ```mermaid
