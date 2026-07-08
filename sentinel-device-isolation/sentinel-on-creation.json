@@ -2,18 +2,52 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "workspace": {
-            "type": "String"
+        "workspaceName": {
+            "type": "String",
+            "metadata": {
+                "description": "The Microsoft Sentinel Log Analytics workspace name."
+            }
+        },
+        "subscriptionId": {
+            "type": "String",
+            "defaultValue": "[subscription().subscriptionId]",
+            "metadata": {
+                "description": "The Azure Subscription ID where the Logic App lives."
+            }
+        },
+        "resourceGroupName": {
+            "type": "String",
+            "metadata": {
+                "description": "The name of the Resource Group containing the target Logic App workflow."
+            }
+        },
+        "logicAppName": {
+            "type": "String",
+            "defaultValue": "AutoIsolate-Playbook",
+            "metadata": {
+                "description": "The name of the target Logic App workflow."
+            }
+        },
+        "triggerKeywords": {
+            "type": "Array",
+            "defaultValue": [
+                "Generic Threat Condition Alpha",
+                "Generic Threat Condition Beta",
+                "Generic Threat Condition Gamma"
+            ],
+            "metadata": {
+                "description": "The specific incident titles that will trigger this playbook execution automatically."
+            }
         }
     },
     "resources": [
         {
-            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/AutomationRules/00000000-0000-0000-0000-000000000000')]",
-            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/00000000-0000-0000-0000-000000000000')]",
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspaceName'), 'Microsoft.SecurityInsights'),'/AutomationRules/00000000-0000-0000-0000-000000000000')]",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/00000000-0000-0000-0000-000000000000')]",
             "type": "Microsoft.OperationalInsights/workspaces/providers/AutomationRules",
             "apiVersion": "2024-04-01-preview",
             "properties": {
-                "displayName": "COMPANY-AutoIsolate (on creation)",
+                "displayName": "SOC-AutoIsolate (on creation)",
                 "order": 3,
                 "triggeringLogic": {
                     "isEnabled": true,
@@ -25,11 +59,7 @@
                             "conditionProperties": {
                                 "propertyName": "IncidentTitle",
                                 "operator": "Contains",
-                                "propertyValues": [
-                                    "Generic Threat Condition Alpha",
-                                    "Generic Threat Condition Beta",
-                                    "Generic Threat Condition Gamma"
-                                ]
+                                "propertyValues": "[parameters('triggerKeywords')]"
                             }
                         },
                         {
@@ -49,8 +79,8 @@
                         "order": 1,
                         "actionType": "RunPlaybook",
                         "actionConfiguration": {
-                            "logicAppResourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/COMPANY-Sentinel-REGION-RG-01/providers/Microsoft.Logic/workflows/COMPANY-AutoIsolate",
-                            "tenantId": "00000000-0000-0000-0000-000000000000"
+                            "logicAppResourceId": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Logic/workflows/', parameters('logicAppName'))]",
+                            "tenantId": "[subscription().tenantId]"
                         }
                     }
                 ]
