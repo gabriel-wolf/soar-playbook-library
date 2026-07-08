@@ -19,8 +19,8 @@ This repository is structured as a monorepo, where each subfolder represents a s
 ## Library Directory
 
 ### 1. [Context-Aware User Disruption](./sentinel-user-disruption/)
-* **Primary Function:** Automated identity containment and session revocation via the Microsoft Graph API.
-* **Key Features:** 
+* **Primary Function:** Automated user profile lookup via Microsoft Graph and identity containment via a custom corporate Identity API.
+* **Key Features:**
   * Dynamic active-hours logic parsing (8:00 AM – 8:00 PM CST evaluations).
   * Automated **VIP/Executive Identity protection bypass loops** targeting high-profile roles (Chancellors, Presidents, C-Suite) to mitigate critical business downtime risks.
   * Native ITSM ticketing integration for rapid service-desk handoffs.
@@ -39,8 +39,15 @@ This repository is structured as a monorepo, where each subfolder represents a s
 
 Every blueprint in this framework is designed under the following engineering principles:
 * **Least Privilege Identity Management:** All cloud tasks are scoped strictly around Azure Managed Service Identities (MSI) or tight Service Principal OAuth tokens, eliminating hardcoded long-lived secrets.
-* **Blast Radius Containment:** Workflows include clear testing/simulation parameters (`DisableInProduction`, `SIMULATE_EMAIL`) to support safe integration testing in non-production landing zones.
+* **Blast Radius Containment:** Workflows include explicit testing and simulation parameters (such as `DisableInProduction` and `SendProductionEmail`) to support safe integration testing and mock execution branches in non-production landing zones.
 * **Analyst-First Design:** Automation shouldn't hide data. Every playbook terminates by outputting a highly visual, HTML-formatted data card straight to priority SOC analyst communication streams, summarizing the action taken, current isolation tracking status, and direct-to-portal incident hyperlinks.
+
+---
+
+
+## Getting Started & Validation
+
+Before deploying any templates to a live production tenant, you can discover your environment configurations and run pre-flight local syntax validation checks using our [Azure Deployment & Validation Helper Guide](./helper-files.md).
 
 ---
 
