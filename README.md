@@ -127,7 +127,7 @@ flowchart TD
     IsolateSuccessful -->|No| IsolationFailed[Log Failure Details to Audit History]
    ```
 
-### 2. [Context-Aware User Containment](./sentinel-user-disruption/)
+### 2. [Autonomouse User Containment](./sentinel-user-disruption/)
 * **Primary Function:** Automated user profile lookup via Microsoft Graph and identity containment via a custom corporate Identity API.
 * **Key Features:**
   * Dynamic active-hours logic parsing (8:00 AM – 8:00 PM CST evaluations).
