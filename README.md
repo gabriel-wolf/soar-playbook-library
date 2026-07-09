@@ -15,8 +15,8 @@ A collection of production-grade, context-aware Security Orchestration, Automati
 * **Primary Function:** Automated endpoint containment utilizing the Microsoft Defender for Endpoint (MDE) API.
 * **Key Features:**
   * Pre-containment state evaluation checking to prevent unnecessary disruptions.
-  * Automatic system classification loops separating standard workstations from mission-critical servers (`Server` / `Linux`).
-  * An asynchronous verification engine (`Until` loop) polling the MDE machine actions API every 60 seconds to guarantee confirmation of isolation on the wire.
+  * Automatic system classification loops separating standard workstations from mission-critical servers.
+  * An asynchronous verification engine polling the MDE machine actions API every 60 seconds to guarantee confirmation of isolation.
   * Integrated Azure OpenAI (`gpt-4o-mini`) agent block generating briefs for SOC analysts.
 
 
