@@ -125,7 +125,7 @@ flowchart TD
 * **Primary Function:** Automated user profile lookup via Microsoft Graph and identity containment via a custom corporate Identity API.
 * **Key Features:**
   * Dynamic active-hours logic parsing (for SOC on-call).
-  * Automated VIP/Executive Identity protection bypass loops targeting high-profile roles (Chancellors, Presidents, C-Suite) to mitigate critical business downtime risks.
+  * Automated VIP/Executive Identity protection bypass loops targeting high-profile roles to mitigate critical business downtime risks.
   * Native ITSM ticketing integration for rapid service-desk handoffs.
 
 ## Simplified Logic App Flowchart
