@@ -1,49 +1,80 @@
-{
+﻿{
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
         "logicAppName": {
-            "type": "string",
+            "type": "String",
             "defaultValue": "AutoIsolate-Playbook",
-            "metadata": { "description": "The name of your Logic App workflow." }
+            "metadata": {
+                "description": "The name of the Logic App / Playbook resource."
+            }
         },
         "location": {
-            "type": "string",
+            "type": "String",
             "defaultValue": "[resourceGroup().location]",
-            "metadata": { "description": "The Azure region to deploy into." }
+            "metadata": {
+                "description": "The Azure region where the playbook will be deployed."
+            }
         },
-        "subscriptionId": {
-            "type": "string",
-            "defaultValue": "[subscription().subscriptionId]",
-            "metadata": { "description": "Target subscription identifier." }
+        "itsmEmailRecipient": {
+            "type": "String",
+            "defaultValue": "itsupport@contoso.com",
+            "metadata": {
+                "description": "Production destination for creating automated ITSM support tickets."
+            }
         },
-        "resourceGroupName": {
-            "type": "string",
-            "defaultValue": "[resourceGroup().name]",
-            "metadata": { "description": "Target resource group name." }
+        "testItsmEmailRecipient": {
+            "type": "String",
+            "defaultValue": "itsm-test@contoso.com",
+            "metadata": {
+                "description": "Email destination for testing ITSM tickets."
+            }
         },
-        "keyVaultName": {
-            "type": "string",
-            "defaultValue": "your-keyvault-name",
-            "metadata": { "description": "Name of the key vault providing the Service Principal secret." }
+        "socEmailRecipient": {
+            "type": "String",
+            "defaultValue": "soc@contoso.com",
+            "metadata": {
+                "description": "Main email destination for standard SOC alerts."
+            }
         },
-        "secretName": {
-            "type": "string",
-            "defaultValue": "GraphApiSecret",
-            "metadata": { "description": "Secret name containing the Client Secret for Microsoft Graph authentication." }
+        "executiveEmailRecipients": {
+            "type": "String",
+            "defaultValue": "soc@contoso.com,soc-manager@contoso.com,ciso@contoso.com",
+            "metadata": {
+                "description": "Comma-separated list of recipients notified when a VIP account is targeted."
+            }
         },
-        "graphTenantId": {
-            "type": "string",
-            "defaultValue": "00000000-0000-0000-0000-000000000000",
-            "metadata": { "description": "Tenant ID used for ActiveDirectoryOAuth authentication to Graph." }
+        "securityAlertsEmailRecipient": {
+            "type": "String",
+            "defaultValue": "security-alerts@contoso.com",
+            "metadata": {
+                "description": "Email destination for security alerts copy (Cc)."
+            }
         },
-        "graphClientId": {
-            "type": "string",
-            "defaultValue": "00000000-0000-0000-0000-000000000000",
-            "metadata": { "description": "App Registration client ID with SecurityAlert.ReadWrite.All permissions." }
+        "identityApiBaseUri": {
+            "type": "String",
+            "defaultValue": "https://api.contoso.com",
+            "metadata": {
+                "description": "Base URI for the internal identity API."
+            }
         }
     },
-    "variables": {},
+    "variables": {
+        "connections": {
+            "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', 'azuresentinel')]"
+            },
+            "azuresentinel-1": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', 'azuresentinel')]"
+            },
+            "office365-2": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', 'office365')]"
+            },
+            "keyvault": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', 'keyvault')]"
+            }
+        }
+    },
     "resources": [
         {
             "type": "Microsoft.Logic/workflows",
@@ -55,536 +86,692 @@
             },
             "properties": {
                 "state": "Enabled",
+                "parameters": {
+                    "$connections": {
+                        "value": "[variables('connections')]"
+                    },
+                    "DisableInProduction": {
+                        "value": true
+                    },
+                    "SendProductionEmail": {
+                        "value": true
+                    },
+                    "DISABLE": {
+                        "value": "Active"
+                    }
+                },
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "type": "Object"
+                        },
+                        "DisableInProduction": {
+                            "type": "Bool"
+                        },
+                        "SendProductionEmail": {
+                            "type": "Bool"
+                        },
+                        "DISABLE": {
+                            "type": "String"
+                        }
+                    },
                     "triggers": {
                         "Microsoft_Sentinel_incident": {
                             "type": "ApiConnectionWebhook",
                             "inputs": {
                                 "host": {
                                     "connection": {
-                                        "name": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/connections/azuresentinel')]"
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
                                 "body": {
-                                    "callback_url": "@listCallbackUrl()"
+                                    "callback_url": "@{listCallbackUrl()}"
                                 },
                                 "path": "/incident-creation"
-                            }
+                            },
+                            "conditions": []
                         }
                     },
                     "actions": {
-                        "Closed_Control": {
-                            "type": "If",
-                            "expression": {
-                                "and": [
-                                    { "equals": [ "@parameters('CLOSED_CONTROL')", true ] },
-                                    { "equals": [ "@triggerBody()?['object']?['properties']?['status']", "Closed" ] }
+                        "Successful_Completion": {
+                            "runAfter": {
+                                "For_Each_Account": [
+                                    "Succeeded"
                                 ]
                             },
+                            "type": "Terminate",
+                            "inputs": {
+                                "runStatus": "Succeeded"
+                            }
+                        },
+                        "For_Each_Account": {
+                            "foreach": "@variables('Matches')",
                             "actions": {
-                                "Closed_-_Terminate": {
-                                    "type": "Terminate",
-                                    "inputs": { "runStatus": "Cancelled" }
-                                }
-                            },
-                            "runAfter": {
-                                "For_Each_Alert": [ "Succeeded" ]
-                            }
-                        },
-                        "Prevented_Control": {
-                            "type": "If",
-                            "expression": {
-                                "and": [
-                                    { "equals": [ "@parameters('PREVENTED_CONTROL')", true ] },
-                                    {
-                                        "or": [
-                                            { "contains": [ "@triggerBody()?['object']?['properties']?['title']", "was prevented" ] },
-                                            { "contains": [ "@triggerBody()?['object']?['properties']?['title']", "was blocked" ] }
-                                        ]
-                                    }
-                                ]
-                            },
-                            "actions": {
-                                "Prevented_-_Terminate": {
-                                    "type": "Terminate",
-                                    "inputs": { "runStatus": "Cancelled" }
-                                }
-                            },
-                            "runAfter": {
-                                "Closed_Control": [ "Succeeded" ]
-                            }
-                        },
-                        "Compose_Incident_URL": {
-                            "type": "Compose",
-                            "inputs": "<a href=\"https://security.microsoft.com/incidents/@{triggerBody()?['object']?['properties']?['providerIncidentId']}\">@{triggerBody()?['object']?['properties']?['title']}</a>",
-                            "runAfter": {
-                                "Prevented_Control": [ "Succeeded" ]
-                            }
-                        },
-                        "Compose_Alerts": {
-                            "type": "Compose",
-                            "inputs": "@variables('ActiveAlerts')",
-                            "runAfter": {
-                                "Compose_Incident_URL": [ "Succeeded" ]
-                            }
-                        },
-                        "Summary_Agent": {
-                            "type": "Agent",
-                            "inputs": {
-                                "parameters": {
-                                    "messages": [
-                                        {
-                                            "role": "system",
-                                            "content": "A device, or multiple devices have just been isolated. \n\nYou have been given the list of devices that were isolated and a list of triggered alerts that caused the isolation of that device. Note, that because this processes has taken place, it means that it was determined that automatic remediation missed or did not \"prevent\" or \"block\" a process. So please summarize from the point of view of before isolation. Don't even mention the isolation that the current process took. You are writing a summary of why you isolated, so the fact that you took action or isolated is irrelevant. No bold or formatting allowed. You need to write a summary of that alert in only 1-2 lines. Do not return any conversational details, only return the 1-2 line summary. Please also include before the 1-2 line summary the name of the device for example:\n\nDEVICENAME.domain.com: XXXX \n\n### Device Names:\n@{union(variables('ActiveEntities'), variables('ActiveEntities'))}\n\n### Alerts:\n@{outputs('Compose_Alerts')}"
-                                        }
-                                    ],
-                                    "agentModelType": "AzureOpenAI",
-                                    "agentModelSettings": {
-                                        "agentHistoryReductionSettings": {
-                                            "agentHistoryReductionType": "maximumTokenCountReduction",
-                                            "maximumTokenCount": 128000
-                                        }
-                                    },
-                                    "modelId": "gpt-4o-mini"
-                                }
-                            },
-                            "limit": { "count": 100 },
-                            "runAfter": {
-                                "Compose_Alerts": [ "Succeeded" ]
-                            }
-                        },
-                        "Initialize_Variables": {
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    { "name": "DeviceName", "type": "string" },
-                                    { "name": "IsServer", "type": "boolean", "value": false },
-                                    { "name": "TO", "type": "string", "value": "analyst@example.com" },
-                                    { "name": "CC", "type": "string", "value": "analyst@example.com" },
-                                    { "name": "SUBJECT", "type": "string", "value": "TEST EMAIL" },
-                                    { "name": "BODY", "type": "string" },
-                                    { "name": "MachineID", "type": "string" },
-                                    { "name": "IsAfterHours", "type": "boolean", "value": false },
-                                    { "name": "IsIsolated", "type": "boolean", "value": false },
-                                    { "name": "OS Platform", "type": "string" },
-                                    { "name": "Isolation Confirmed", "type": "boolean", "value": false },
-                                    { "name": "AadDeviceID", "type": "string" },
-                                    { "name": "ActiveEntities", "type": "array" },
-                                    { "name": "ActiveAlerts", "type": "array" }
-                                ]
-                            },
-                            "runAfter": {
-                                "Get_incident": [ "Succeeded" ]
-                            }
-                        },
-                        "Get_incident": {
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/connections/azuresentinel')]"
-                                    }
-                                },
-                                "method": "post",
-                                "body": { "incidentArmId": "@triggerBody()?['object']?['id']" },
-                                "path": "/Incidents"
-                            },
-                            "runAfter": {}
-                        },
-                        "Get_SP_Secret": {
-                            "type": "ApiConnection",
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/connections/keyvault-1')]"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "[concat('/secrets/', encodeURIComponent(parameters('secretName')), '/value')]"
-                            },
-                            "runtimeConfiguration": {
-                                "secureData": { "properties": [ "inputs", "outputs" ] }
-                            },
-                            "runAfter": {
-                                "Initialize_Variables": [ "Succeeded" ]
-                            }
-                        },
-                        "For_Each_Alert": {
-                            "type": "Foreach",
-                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
-                            "actions": {
-                                "Get_Alert_Details": {
+                                "Get_User": {
                                     "type": "Http",
                                     "inputs": {
-                                        "uri": "https://graph.microsoft.com/v1.0/security/alerts_v2/da@{items('For_Each_Alert')?['properties']?['providerAlertId']}",
+                                        "uri": "https://graph.microsoft.com/v1.0/users/@{items('For_Each_Account')['Account']}",
                                         "method": "GET",
-                                        "headers": {
-                                            "Content-Type": "application/json",
-                                            "Prefer": "include-unknown-enum-members"
-                                        },
                                         "authentication": {
-                                            "type": "ActiveDirectoryOAuth",
-                                            "authority": "https://login.microsoftonline.com",
-                                            "tenant": "[parameters('graphTenantId')]",
-                                            "audience": "https://graph.microsoft.com",
-                                            "clientId": "[parameters('graphClientId')]",
-                                            "secret": "@{body('Get_SP_Secret')?['value']}"
+                                            "type": "ManagedServiceIdentity",
+                                            "audience": "https://graph.microsoft.com"
                                         }
                                     },
                                     "runtimeConfiguration": {
-                                        "contentTransfer": { "transferMode": "Chunked" }
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
                                     }
                                 },
-                                "Filter_Remediation": {
-                                    "type": "Query",
-                                    "inputs": {
-                                        "from": "@body('Get_Alert_Details')?['evidence']",
-                                        "where": "@and(equals(item()?['@odata.type'], '#microsoft.graph.security.fileEvidence'), equals(item()?['remediationStatus'], 'active'))"
-                                    },
+                                "Get_On-Premises": {
                                     "runAfter": {
-                                        "Get_Alert_Details": [ "Succeeded" ]
-                                    }
-                                },
-                                "Check_Active": {
-                                    "type": "If",
-                                    "expression": {
-                                        "and": [
-                                            { "greater": [ "@length(body('Filter_Remediation'))", 0 ] }
+                                        "Parse_User": [
+                                            "Succeeded"
                                         ]
                                     },
-                                    "actions": {
-                                        "Append_to_ActiveEntities": {
-                                            "type": "AppendToArrayVariable",
-                                            "inputs": {
-                                                "name": "ActiveEntities",
-                                                "value": {
-                                                    "mdeDeviceId": "@{body('Get_Alert_Details')?['evidence']?[0]?['mdeDeviceId']}",
-                                                    "azureAdDeviceId": "@{body('Get_Alert_Details')?['evidence']?[0]?['azureAdDeviceId']}",
-                                                    "osPlatform": "@{body('Get_Alert_Details')?['evidence']?[0]?['osPlatform']}",
-                                                    "deviceDnsName": "@{body('Get_Alert_Details')?['evidence']?[0]?['deviceDnsName']}"
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "https://graph.microsoft.com/v1.0/users/@{items('For_Each_Account')['Account']}?$select=onPremisesExtensionAttributes,onPremisesSamAccountName,onPremisesDomainName,onPremisesUserPrincipalName",
+                                        "method": "GET",
+                                        "authentication": {
+                                            "type": "ManagedServiceIdentity",
+                                            "audience": "https://graph.microsoft.com"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                },
+                                "Parse_User": {
+                                    "runAfter": {
+                                        "Get_User": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_User')",
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "businessPhones": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "displayName": {
+                                                    "type": "string"
+                                                },
+                                                "givenName": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "jobTitle": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "mail": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "mobilePhone": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "officeLocation": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "preferredLanguage": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "surname": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "userPrincipalName": {
+                                                    "type": "string"
+                                                },
+                                                "id": {
+                                                    "type": "string"
                                                 }
                                             }
+                                        }
+                                    }
+                                },
+                                "Parse_On-Prem": {
+                                    "runAfter": {
+                                        "Get_On-Premises": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_On-Premises')",
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "onPremisesSamAccountName": {
+                                                    "type": "string"
+                                                },
+                                                "onPremisesUserPrincipalName": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "VIP_Check": {
+                                    "actions": {
+                                        "Current_time": {
+                                            "runAfter": {
+                                                "Check_Disable_Permit": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Expression",
+                                            "kind": "CurrentTime",
+                                            "inputs": {}
                                         },
-                                        "Append_to_ActiveAlerts": {
-                                            "type": "AppendToArrayVariable",
-                                            "inputs": {
-                                                "name": "ActiveAlerts",
-                                                "value": "@first(variables('ActiveEntities'))"
+                                        "Check_Disable_Permit": {
+                                            "actions": {
+                                                "(ACTIVE)_Identity_Disable": {
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "uri": "[concat(parameters('identityApiBaseUri'), string('/identity/user/@{body(''Parse_On-Prem'')?[''onPremisesSamAccountName'']}/Account'))]",
+                                                        "method": "PATCH",
+                                                        "headers": {
+                                                            "accept": "application/json",
+                                                            "X-TOKEN": "@{body('Get_X-TOKEN')?['value']}",
+                                                            "Content-Type": "application/json"
+                                                        },
+                                                        "body": {
+                                                            "action": "DisableReset"
+                                                        }
+                                                    },
+                                                    "runtimeConfiguration": {
+                                                        "contentTransfer": {
+                                                            "transferMode": "Chunked"
+                                                        }
+                                                    }
+                                                },
+                                                "Update_incident": {
+                                                    "runAfter": {
+                                                        "(ACTIVE)_Identity_Disable": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel-1']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "put",
+                                                        "body": {
+                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "tagsToAdd": {
+                                                                "TagsToAdd": [
+                                                                    {
+                                                                        "Tag": "AUTOCONTAIN"
+                                                                    }
+                                                                ]
+                                                            }
+                                                        },
+                                                        "path": "/Incidents"
+                                                    }
+                                                }
                                             },
                                             "runAfter": {
-                                                "Append_to_ActiveEntities": [ "Succeeded" ]
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {
-                                        "Filter_Remediation": [ "Succeeded" ]
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "Get_SP_Secret": [ "Succeeded" ]
-                            }
-                        },
-                        "For_Each_Host": {
-                            "type": "Foreach",
-                            "foreach": "@union(variables('ActiveEntities'), variables('ActiveEntities'))",
-                            "actions": {
-                                "Set_IsAfterHours": {
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "IsAfterHours",
-                                        "value": "@or(less(int(convertFromUtc(utcNow(), 'Central Standard Time', 'HH')), 8), greaterOrEquals(int(convertFromUtc(utcNow(), 'Central Standard Time', 'HH')), 20))"
-                                    }
-                                },
-                                "Set_MachineID": {
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "MachineID",
-                                        "value": "@items('For_Each_Host')?['mdeDeviceId']"
-                                    },
-                                    "runAfter": { "Set_IsAfterHours": [ "Succeeded" ] }
-                                },
-                                "Set_AadDeviceID": {
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "AadDeviceID",
-                                        "value": "@items('For_Each_Host')?['azureAdDeviceId']"
-                                    },
-                                    "runAfter": { "Set_MachineID": [ "Succeeded" ] }
-                                },
-                                "Get_Single_Machine": {
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "host": {
-                                            "connection": {
-                                                "name": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/connections/wdatp')]"
-                                            }
-                                        },
-                                        "method": "get",
-                                        "path": "/api/machines/@{encodeURIComponent(variables('MachineID'))}"
-                                    },
-                                    "runAfter": { "Set_AadDeviceID": [ "Succeeded" ] }
-                                },
-                                "Set_DeviceName": {
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "DeviceName",
-                                        "value": "@body('Get_Single_Machine')?['computerDnsName']"
-                                    },
-                                    "runAfter": { "Get_Single_Machine": [ "Succeeded" ] }
-                                },
-                                "Set_OS_Platform": {
-                                    "type": "SetVariable",
-                                    "inputs": {
-                                        "name": "OS Platform",
-                                        "value": "@body('Get_Single_Machine')?['osPlatform']"
-                                    },
-                                    "runAfter": { "Set_DeviceName": [ "Succeeded" ] }
-                                },
-                                "Is_Server": {
-                                    "type": "If",
-                                    "expression": {
-                                        "or": [
-                                            { "contains": [ "@variables('OS Platform')", "Server" ] },
-                                            { "contains": [ "@variables('OS Platform')", "Linux" ] }
-                                        ]
-                                    },
-                                    "actions": {
-                                        "IsServer_True": {
-                                            "type": "SetVariable",
-                                            "inputs": { "name": "IsServer", "value": true }
-                                        }
-                                    },
-                                    "else": {
-                                        "actions": {
-                                            "IsServer_False": {
-                                                "type": "SetVariable",
-                                                "inputs": { "name": "IsServer", "value": false }
-                                            }
-                                        }
-                                    },
-                                    "runAfter": { "Set_OS_Platform": [ "Succeeded" ] }
-                                },
-                                "Isolation_Logic": {
-                                    "type": "If",
-                                    "expression": {
-                                        "or": [
-                                            {
-                                                "and": [
-                                                    { "equals": [ "@parameters('AFTERHOURS_CONTROL')", true ] },
-                                                    { "equals": [ "@variables('IsAfterHours')", true ] },
-                                                    { "equals": [ "@parameters('ISOLATE_CONTROL')", true ] }
+                                                "Get_X-TOKEN": [
+                                                    "Succeeded"
                                                 ]
-                                            },
-                                            {
-                                                "and": [
-                                                    { "equals": [ "@variables('IsServer')", false ] },
-                                                    { "equals": [ "@parameters('ISOLATE_CONTROL')", true ] }
-                                                ]
-                                            }
-                                        ]
-                                    },
-                                    "actions": {
-                                        "Isolate_Machine": {
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/connections/wdatp')]"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "body": {
-                                                    "Comment": "Isolated @{variables('DeviceName')} [@{variables('MachineID')}] due to @{triggerBody()?['object']?['properties']?['title']} [@{triggerBody()?['object']?['properties']?['additionalData']?['mergedIncidentNumber']}]",
-                                                    "IsolationType": "Full"
-                                                },
-                                                "path": "/api/machines/@{encodeURIComponent(variables('MachineID'))}/isolate"
-                                            }
-                                        },
-                                        "IsIsolated_True": {
-                                            "type": "SetVariable",
-                                            "inputs": { "name": "IsIsolated", "value": true },
-                                            "runAfter": { "Isolate_Machine": [ "Succeeded" ] }
-                                        },
-                                        "Update_incident": {
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/connections/azuresentinel')]"
-                                                    }
-                                                },
-                                                "method": "put",
-                                                "body": {
-                                                    "incidentArmId": "@body('Get_incident')?['id']",
-                                                    "tagsToAdd": { "TagsToAdd": [ { "Tag": "AUTOCONTAIN" } ] }
-                                                },
-                                                "path": "/Incidents"
-                                            },
-                                            "runAfter": { "IsIsolated_True": [ "Succeeded" ] }
-                                        }
-                                    },
-                                    "else": {
-                                        "actions": {
-                                            "Set_MachineID_to_TestBox": {
-                                                "type": "SetVariable",
-                                                "inputs": { "name": "MachineID", "value": "0000000000000000000000000000000000000000" }
-                                            },
-                                            "IsIsolated_False": {
-                                                "type": "SetVariable",
-                                                "inputs": { "name": "IsIsolated", "value": false },
-                                                "runAfter": { "Set_MachineID_to_TestBox": [ "Succeeded" ] }
-                                            }
-                                        }
-                                    },
-                                    "runAfter": { "Is_Server": [ "Succeeded" ] }
-                                },
-                                "Until": {
-                                    "type": "Until",
-                                    "expression": "@equals(variables('Isolation Confirmed'), true)",
-                                    "limit": { "count": 15, "timeout": "PT1H" },
-                                    "actions": {
-                                        "5s_delay": { "type": "Wait", "inputs": { "interval": { "count": 5, "unit": "Second" } } },
-                                        "Get_All_Actions": {
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "[concat('/subscriptions/', parameters('subscriptionId'), '/resourceGroups/', parameters('resourceGroupName'), '/providers/Microsoft.Web/connections/wdatp')]"
-                                                    }
-                                                },
-                                                "method": "get",
-                                                "path": "/api/machineactions"
-                                            },
-                                            "runAfter": { "5s_delay": [ "Succeeded" ] }
-                                        },
-                                        "Filter_Isolate_Machine_Actions": {
-                                            "type": "Query",
-                                            "inputs": {
-                                                "from": "@body('Get_All_Actions')?['value']",
-                                                "where": "@and(equals(item()?['machineId'], variables('MachineID')), equals(item()?['type'], 'Isolate'))"
-                                            },
-                                            "runAfter": { "Get_All_Actions": [ "Succeeded" ] }
-                                        },
-                                        "Compose_Latest_Action": {
-                                            "type": "Compose",
-                                            "inputs": "@first(body('Filter_Isolate_Machine_Actions'))",
-                                            "runAfter": { "Filter_Isolate_Machine_Actions": [ "Succeeded" ] }
-                                        },
-                                        "Confirm_Isolation": {
-                                            "type": "If",
-                                            "expression": {
-                                                "and": [
-                                                    { "equals": [ "@outputs('Compose_Latest_Action')?['status']\r\n", "Succeeded" ] }
-                                                ]
-                                            },
-                                            "actions": {
-                                                "Isolation_Confirmed": {
-                                                    "type": "SetVariable",
-                                                    "inputs": { "name": "Isolation Confirmed", "value": true }
-                                                }
                                             },
                                             "else": {
                                                 "actions": {
-                                                    "Isolation_Not_Confirmed": {
-                                                        "type": "SetVariable",
-                                                        "inputs": { "name": "Isolation Confirmed", "value": false }
-                                                    },
-                                                    "60s_Delay": {
-                                                        "type": "Wait",
-                                                        "inputs": { "interval": { "count": 60, "unit": "Second" } },
-                                                        "runAfter": { "Isolation_Not_Confirmed": [ "Succeeded" ] }
+                                                    "(TESTING)_Identity_Disable": {
+                                                        "type": "Http",
+                                                        "inputs": {
+                                                            "uri": "[concat(parameters('identityApiBaseUri'), '/identity/user/testuser01/Account')]",
+                                                            "method": "PATCH",
+                                                            "headers": {
+                                                                "accept": "application/json",
+                                                                "X-TOKEN": "@{body('Get_X-TOKEN')?['value']}",
+                                                                "Content-Type": "application/json"
+                                                            },
+                                                            "body": {
+                                                                "action": "DisableReset"
+                                                            }
+                                                        },
+                                                        "runtimeConfiguration": {
+                                                            "contentTransfer": {
+                                                                "transferMode": "Chunked"
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             },
-                                            "runAfter": { "Compose_Latest_Action": [ "Succeeded" ] }
-                                        }
-                                    },
-                                    "runAfter": { "Isolation_Logic": [ "Succeeded" ] }
-                                },
-                                "[1]_Isolation_Not_Enabled": {
-                                    "type": "If",
-                                    "expression": {
-                                        "or": [
-                                            { "equals": [ "@parameters('SIMULATE_EMAIL')", 1 ] },
-                                            {
+                                            "expression": {
                                                 "and": [
-                                                    { "equals": [ "@parameters('ISOLATE_CONTROL')", false ] },
-                                                    { "equals": [ "@parameters('SIMULATE_EMAIL')", 0 ] }
+                                                    {
+                                                        "equals": [
+                                                            "@parameters('DisableInProduction')",
+                                                            true
+                                                        ]
+                                                    }
                                                 ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Check_Email_Permit": {
+                                            "actions": {
+                                                "Submit_ITSM_Ticket": {
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['office365-2']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "body": {
+                                                            "To": "[parameters('itsmEmailRecipient')]",
+                                                            "Subject": "Compromised Account – Identity Auto-Containment – Account Disabled",
+                                                            "Body": "<p class=\"editor-paragraph\">The following user account is at-risk or already compromised, based on an associated High Risk alert.<br><br>To protect the account holder and other critical organization resources, the account was disabled and the password was pre-expired. A request has automatically been sent to the IT Service Desk to assist the user with account recovery.<br><br>Affected user:<br>Name: @{concat(trim(last(split(outputs('Parse_User')?['body']?['displayName'], ','))), ' ', trim(first(split(outputs('Parse_User')?['body']?['displayName'], ','))))}<br>Email: @{items('For_Each_Account')['Account']}<br>Username: @{body('Parse_On-Prem')?['onPremisesSamAccountName']}<br><br>*This Security Incident was automatically created and closed as part of an Automated Incident Disruption playbook in Sentinel.</p>",
+                                                            "Cc": "[parameters('securityAlertsEmailRecipient')]",
+                                                            "Importance": "High"
+                                                        },
+                                                        "path": "/v2/Mail"
+                                                    }
+                                                },
+                                                "VIP_Mail": {
+                                                    "actions": {
+                                                        "VIP_SOC_Email": {
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['office365-2']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "body": {
+                                                                    "To": "[parameters('executiveEmailRecipients')]",
+                                                                    "Subject": "VIP Account Has Been Disabled",
+                                                                    "Body": "<p class=\"editor-paragraph\">Security Controls have automatically disabled the following VIP user account, following a High Risk security incident. The account was disabled because it was at High Risk or already compromised. Analysts will review the incident and relay additional information, if warranted.</p><p class=\"editor-paragraph\"><br><b><strong class=\"editor-text-bold\" style=\"color: rgb(208, 2, 27);\">Executive Recovery team – Please reach out to the user to initiate a prompt account recovery.</strong></b></p><p class=\"editor-paragraph\"><br><b><strong class=\"editor-text-bold\">User:</strong></b><br>Name: @{concat(trim(last(split(outputs('Parse_User')?['body']?['displayName'], ','))), ' ', trim(first(split(outputs('Parse_User')?['body']?['displayName'], ','))))}<br>Email: @{items('For_Each_Account')['Account']}<br>Username: @{body('Parse_On-Prem')?['onPremisesSamAccountName']}<br><br><b><strong class=\"editor-text-bold\">Position Title:</strong></b><br>@{coalesce(body('Parse_User')?['jobTitle'], 'No Position Title')}<br><br><b><strong class=\"editor-text-bold\">Reason:</strong></b><br>@{outputs('Compose_Incident_URL')}<br><br><b><strong class=\"editor-text-bold\">Actions Taken:</strong></b><br>Account Disabled<br>Password Pre-Expired<br>Incident Ticket created/closed in ITSM Tool<br>Account Recovery Tasks sent to Service Desk<br><br><b><strong class=\"editor-text-bold\" style=\"color: rgb(236, 1, 30);\">SOC Analyst Actions Needed:</strong></b><br><span style=\"color: rgb(236, 1, 30);\">Review the referenced Incident / Alert</span><br><span style=\"color: rgb(236, 1, 30);\">Complete remediation</span><br><span style=\"color: rgb(236, 1, 30);\">Update/Close Incident in Defender</span></p>",
+                                                                    "Cc": "[parameters('securityAlertsEmailRecipient')]",
+                                                                    "Importance": "High"
+                                                                },
+                                                                "path": "/v2/Mail"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Submit_ITSM_Ticket": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "No_VIP_Send_SOC_Email": {
+                                                                "type": "ApiConnection",
+                                                                "inputs": {
+                                                                    "host": {
+                                                                        "connection": {
+                                                                            "name": "@parameters('$connections')['office365-2']['connectionId']"
+                                                                        }
+                                                                    },
+                                                                    "method": "post",
+                                                                    "body": {
+                                                                        "To": "[parameters('socEmailRecipient')]",
+                                                                        "Subject": "Account Disabled by Auto-Containment Automation",
+                                                                        "Body": "<p class=\"editor-paragraph\">Microsoft Security Controls have determined the following user account is at-risk or already compromised:<br><br><b><strong class=\"editor-text-bold\">User:</strong></b><br>Name: @{concat(trim(last(split(outputs('Parse_User')?['body']?['displayName'], ','))), ' ', trim(first(split(outputs('Parse_User')?['body']?['displayName'], ','))))}<br>Email: @{items('For_Each_Account')['Account']}<br>Username: @{body('Parse_On-Prem')?['onPremisesSamAccountName']}<br><br><b><strong class=\"editor-text-bold\">Position Title:</strong></b><br>@{coalesce(body('Parse_User')?['jobTitle'], 'No Position Title')}<br><br><b><strong class=\"editor-text-bold\">Reason:</strong></b><br>@{outputs('Compose_Incident_URL')}<br><br><b><strong class=\"editor-text-bold\">Actions Taken:</strong></b><br>Account Disabled<br>Password Pre-Expired<br>Ticket created/closed in ITSM tool<br>Account Recovery Tasks sent to Service Desk<br><br><b><strong class=\"editor-text-bold\" style=\"color: rgb(236, 1, 30);\">Analyst Actions Needed:</strong></b><br><span style=\"color: rgb(236, 1, 30);\">Review the referenced Incident / Alert</span><br><span style=\"color: rgb(236, 1, 30);\">Complete remediation</span><br><span style=\"color: rgb(236, 1, 30);\">Update/Close Incident in Defender</span></p><br>",
+                                                                        "Cc": "[parameters('securityAlertsEmailRecipient')]",
+                                                                        "Importance": "High"
+                                                                    },
+                                                                    "path": "/v2/Mail"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@variables('IsVIP')",
+                                                                    true
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Current_time": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "(TESTING)_Submit_ITSM_Ticket": {
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['office365-2']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "body": {
+                                                                "To": "[parameters('testItsmEmailRecipient')]",
+                                                                "Subject": "Compromised Account – Automated Playbook Test",
+                                                                "Body": "<p class=\"editor-paragraph\">The following user account is at-risk or already compromised, based on an associated High Risk alert.<br><br>To protect the account holder and other critical information resources, the account was disabled and the password was pre-expired. A request has automatically been sent to the Service Desk to assist the user with account recovery.<br><br>Affected user:<br>Name: @{concat(trim(last(split(outputs('Parse_User')?['body']?['displayName'], ','))), ' ', trim(first(split(outputs('Parse_User')?['body']?['displayName'], ','))))}<br>Email: @{items('For_Each_Account')['Account']}<br>Username: @{body('Parse_On-Prem')?['onPremisesSamAccountName']}<br><br>*This Security Incident was automatically created and closed as part of an Auto Containment automation test in Sentinel.</p>",
+                                                                "Cc": "[parameters('securityAlertsEmailRecipient')]",
+                                                                "Importance": "High"
+                                                            },
+                                                            "path": "/v2/Mail"
+                                                        }
+                                                    },
+                                                    "(TESTING)_Send_SOC_Email": {
+                                                        "runAfter": {
+                                                            "(TESTING)_Submit_ITSM_Ticket": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['office365-2']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "body": {
+                                                                "To": "[parameters('securityAlertsEmailRecipient')]",
+                                                                "Subject": "(TEST MODE) Account Disabled by Auto-Containment Playbook",
+                                                                "Body": "<p class=\"editor-paragraph\">Microsoft Security Controls have determined the following user account is at-risk or already compromised:<br><br><b><strong class=\"editor-text-bold\">User:</strong></b><br>Name: @{concat(trim(last(split(outputs('Parse_User')?['body']?['displayName'], ','))), ' ', trim(first(split(outputs('Parse_User')?['body']?['displayName'], ','))))}<br>Email: @{items('For_Each_Account')['Account']}<br>Username: @{body('Parse_On-Prem')?['onPremisesSamAccountName']}<br><br><b><strong class=\"editor-text-bold\">Position Title:</strong></b><br>@{coalesce(body('Parse_User')?['jobTitle'], 'No Position Title')}<br><br><b><strong class=\"editor-text-bold\">Reason:</strong></b><br>@{outputs('Compose_Incident_URL')}<br><br><b><strong class=\"editor-text-bold\">Actions Taken:</strong></b><br>Account Disabled<br>Password Pre-Expired<br>Ticket created/closed in ITSM tool<br>Account Recovery Tasks sent to Service Desk<br><br><b><strong class=\"editor-text-bold\">Analyst Actions Needed:</strong></b><br>Review the referenced Incident / Alert<br>Complete remediation<br>Update/Close Incident in Defender.<br><br><br><i><em class=\"editor-text-italic\">[Disable Status: </em></i>@{parameters('DISABLE')}<i><em class=\"editor-text-italic\">]</em></i></p>",
+                                                                "Cc": "[parameters('securityAlertsEmailRecipient')]",
+                                                                "Importance": "High"
+                                                            },
+                                                            "path": "/v2/Mail"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@parameters('SendProductionEmail')",
+                                                            true
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Get_X-TOKEN": {
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/secrets/@{encodeURIComponent('IdentityAPI')}/value"
+                                            },
+                                            "runtimeConfiguration": {
+                                                "secureData": {
+                                                    "properties": [
+                                                        "inputs",
+                                                        "outputs"
+                                                    ]
+                                                }
                                             }
-                                        ]
-                                    },
-                                    "actions": {
-                                        "SUBJECT_[Not_Enabled]": { "type": "SetVariable", "inputs": { "name": "SUBJECT", "value": "Isolation Not Enabled" } },
-                                        "BODY_[Not_Enabled]": {
-                                            "type": "SetVariable",
-                                            "inputs": { "name": "BODY", "value": "This is a message from Security-Auto-Isolation. <b>Isolation is currently disabled, the test machine has been isolated as a test.</b> <i>fix that in the Logic App Parameters.</i> Thank you." },
-                                            "runAfter": { "SUBJECT_[Not_Enabled]": [ "Succeeded" ] }
-                                        },
-                                        "TO_analyst_[2]": {
-                                            "type": "SetVariable",
-                                            "inputs": { "name": "TO", "value": "analyst@example.com" },
-                                            "runAfter": { "BODY_[Not_Enabled]": [ "Succeeded" ] }
-                                        },
-                                        "CC_analyst_[2]": {
-                                            "type": "SetVariable",
-                                            "inputs": { "name": "CC", "value": "analyst@example.com" },
-                                            "runAfter": { "TO_analyst_[2]": [ "Succeeded" ] }
                                         }
+                                    },
+                                    "runAfter": {
+                                        "Check_VIP": [
+                                            "Succeeded"
+                                        ]
                                     },
                                     "else": {
                                         "actions": {
-                                            "[2]_Server_at_Risk": {
-                                                "type": "If",
-                                                "expression": {
-                                                    "or": [
-                                                        {
-                                                            "and": [
-                                                                { "equals": [ "@variables('IsServer')", true ] },
-                                                                { "equals": [ "@variables('IsIsolated')", true ] }
-                                                            ]
-                                                        },
-                                                        { "equals": [ "@parameters('SIMULATE_EMAIL')", 3 ] }
-                                                    ]
-                                                },
+                                            "Check_Email_Permit_[2]": {
                                                 "actions": {
-                                                    "SUBJECT_[Risk]": { "type": "SetVariable", "inputs": { "name": "SUBJECT", "value": "Server at Risk" } },
-                                                    "BODY_[Risk]": {
-                                                        "type": "SetVariable",
-                                                        "inputs": { "name": "BODY", "value": "Microsoft Security Controls have determined the following Server is at-risk or already compromised.\n \n<p style=\"color: #d0021b;\"><b>Analyst Actions Needed:</b><br>\nReview the referenced Incident / Alert<br>\nComplete remediation<br>\nNotify relevant SOC Group (if needed)<br>\nUpdate/Close Incident in Defender</p>" },
-                                                        "runAfter": { "SUBJECT_[Risk]": [ "Succeeded" ] }
-                                                    },
-                                                    "TO_[Risk]": {
-                                                        "type": "SetVariable",
-                                                        "inputs": { "name": "TO", "value": "soc@example.com" },
-                                                        "runAfter": { "BODY_[Risk]": [ "Succeeded" ] }
-                                                    },
-                                                    "CC_[Risk]": {
-                                                        "type": "SetVariable",
-                                                        "inputs": { "name": "CC", "value": "analyst@example.com,manager@example.com" },
-                                                        "runAfter": { "TO_[Risk]": [ "Succeeded" ] }
+                                                    "Send_SOC_VIP_Not_Disabled_Email": {
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['office365-2']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "body": {
+                                                                "To": "[parameters('executiveEmailRecipients')]",
+                                                                "Subject": "VIP Account At Risk",
+                                                                "Body": "<p class=\"editor-paragraph\">Microsoft Security Controls have determined the following Executive account is at-risk or already compromised. <b><strong class=\"editor-text-bold\">Automation has not disabled the account</strong></b>, <i><em class=\"editor-text-italic\">so that Support may provide VIP hands-on assistance</em></i>. Please let the Tier 3 team know if we need to assist with re-securing the account. <br><br><b><strong class=\"editor-text-bold\">User:</strong></b><br>Name: @{concat(trim(last(split(outputs('Parse_User')?['body']?['displayName'], ','))), ' ', trim(first(split(outputs('Parse_User')?['body']?['displayName'], ','))))}<br>Email: @{items('For_Each_Account')['Account']}<br>Username: @{body('Parse_On-Prem')?['onPremisesSamAccountName']}<br><br><b><strong class=\"editor-text-bold\">Position Title:</strong></b><br>@{coalesce(body('Parse_User')?['jobTitle'], 'No Position Title')}<br><br><b><strong class=\"editor-text-bold\">Reason:</strong></b><br>@{outputs('Compose_Incident_URL')}</p>",
+                                                                "Cc": "[parameters('securityAlertsEmailRecipient')]",
+                                                                "Importance": "High"
+                                                            },
+                                                            "path": "/v2/Mail"
+                                                        }
                                                     }
                                                 },
                                                 "else": {
                                                     "actions": {
-                                                        "[3]_Server_Has_Been_Disabled": {
-                                                            "type": "If",
-                                                            "expression": {
-                                                                "or": [
-                                                                    {
-                                                                        "and": [
-                                                                            { "equals": [ "@variables('IsIsolated')", false ] },
-                                                                            { "equals": [ "@variables('IsServer')", true ] }
-                                                                        ]
-                                                                    },
-                                                                    { "equals": [ "@parameters('SIMULATE_EMAIL')", 2 ] }
-                                                                ]
-                                                            },
-                                                            "actions": {
-                                                                "SUBJECT_[Server]": { "type": "SetVariable", "inputs": { "name": "SUBJECT", "value": "Server Has Been Isolated by Security AutoContain" } },
-                                                                "BODY_[Server]": {
-                                                                    "type": "SetVariable",
-                                                                    "inputs": { "name": "BODY", "value": "<b>SERVER ISOLATED</b><br
+                                                        "(TESTING)_Send_SOC_VIP_Not_Disabled_Email": {
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['office365-2']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "body": {
+                                                                    "To": "[parameters('securityAlertsEmailRecipient')]",
+                                                                    "Subject": "(TEST MODE) VIP Account NOT Disabled by Automation Playbook",
+                                                                    "Body": "<p class=\"editor-paragraph\">Microsoft Security Controls have determined the following user account is at-risk or already compromised:<br><br><b><strong class=\"editor-text-bold\">User:</strong></b><br>Name: @{concat(trim(last(split(outputs('Parse_User')?['body']?['displayName'], ','))), ' ', trim(first(split(outputs('Parse_User')?['body']?['displayName'], ','))))}<br>Email: @{items('For_Each_Account')['Account']}<br>Username: @{body('Parse_On-Prem')?['onPremisesSamAccountName']}<br><br><b><strong class=\"editor-text-bold\">Position Title:</strong></b><br>@{coalesce(body('Parse_User')?['jobTitle'], 'No Position Title')}<br><br><b><strong class=\"editor-text-bold\">Reason:</strong></b><br>@{outputs('Compose_Incident_URL')}</p>",
+                                                                    "Importance": "High"
+                                                                },
+                                                                "path": "/v2/Mail"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "equals": [
+                                                                "@parameters('SendProductionEmail')",
+                                                                true
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "or": [
+                                            {
+                                                "or": [
+                                                    {
+                                                        "contains": [
+                                                            "@items('For_Each_Account')['Alert']",
+                                                            "This Alert Title should Disable a VIP"
+                                                        ]
+                                                    },
+                                                    {
+                                                        "contains": [
+                                                            "@items('For_Each_Account')['Alert']",
+                                                            "This Alert Title should Disable a VIP"
+                                                        ]
+                                                    },
+                                                    {
+                                                        "contains": [
+                                                            "@triggerBody()?['object']?['properties']?['title']",
+                                                            "This Alert Title should Disable a VIP"
+                                                        ]
+                                                    },
+                                                    {
+                                                        "equals": [
+                                                            "@variables('Workday')",
+                                                            false
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@variables('IsVIP')",
+                                                            false
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Compose_Incident_URL": {
+                                    "runAfter": {
+                                        "Parse_On-Prem": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "<a href=\"https://security.microsoft.com/incidents/@{triggerBody()?['object']?['properties']?['providerIncidentId']}\">@{triggerBody()?['object']?['properties']?['title']}</a>"
+                                },
+                                "8am_to_8pm": {
+                                    "actions": {
+                                        "Set_Workday": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Workday",
+                                                "value": true
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Compose_Incident_URL": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@and(greaterOrEquals(int(convertFromUtc(utcNow(), 'Central Standard Time', 'HH')), 8), less(int(convertFromUtc(utcNow(), 'Central Standard Time', 'HH')), 20))",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Check_VIP": {
+                                    "actions": {
+                                        "Set_VIP": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "IsVIP",
+                                                "value": true
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "8am_to_8pm": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    },
+                                    "expression": {
+                                        "or": [
+                                            {
+                                                "contains": [
+                                                    "@coalesce(body('Parse_User')?['jobTitle'], '')",
+                                                    "Chancellor"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@coalesce(body('Parse_User')?['jobTitle'], '')",
+                                                    "Provost"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@coalesce(body('Parse_User')?['jobTitle'], '')",
+                                                    "President"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@coalesce(body('Parse_User')?['jobTitle'], '')",
+                                                    "CIO"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@coalesce(body('Parse_User')?['jobTitle'], '')",
+                                                    "CFO"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@coalesce(body('Parse_User')?['jobTitle'], '')",
+                                                    "CMO"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@coalesce(body('Parse_User')?['jobTitle'], '')",
+                                                    "COO"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
