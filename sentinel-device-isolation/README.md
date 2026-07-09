@@ -186,17 +186,6 @@ The workflow may use duplicate connector aliases, such as `wdatp` / `wdatp-1` or
 | `afterHoursControl`     | bool   | `true`                                     | Allow server isolation during after-hours windows                                               |
 | `simulateEmail`         | int    | `0`                                        | Email simulation mode. `0` disables simulation; `1`-`4` force specific notification branches    |
 
-### Optional Compatibility Parameters
-
-Some older deployment parameter files may still include parameters from related auto-containment templates. If the ARM template includes these compatibility parameters, they are accepted to prevent validation failures, but they are not used by the device-isolation workflow.
-
-| Parameter                  | Type   | Description                                                          |
-| -------------------------- | ------ | -------------------------------------------------------------------- |
-| `itsmEmailRecipient`       | string | Compatibility placeholder from identity/account-disruption templates |
-| `executiveEmailRecipients` | string | Compatibility placeholder from identity/account-disruption templates |
-
-If your template does not define these compatibility parameters, remove them from your deployment parameter file or `az deployment group create` command.
-
 ### Logic App Runtime Parameters
 
 The ARM template maps deployment parameters into Logic App runtime parameters.
