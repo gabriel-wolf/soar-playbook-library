@@ -14,10 +14,10 @@ A collection of production-grade, context-aware Security Orchestration, Automati
 # 1. [Autonomous Device Isolation](./sentinel-device-isolation/)
 * **Primary Function:** Automated endpoint containment utilizing the Microsoft Defender for Endpoint (MDE) API.
 * **Key Features:**
-  * Integrated **Azure OpenAI (`gpt-4o-mini`) agent** block generating briefs for SOC analysts.
   * Pre-containment state evaluation checking to prevent unnecessary disruptions.
   * Automatic system classification loops separating standard workstations from mission-critical servers (`Server` / `Linux`).
   * An asynchronous verification engine (`Until` loop) polling the MDE machine actions API every 60 seconds to guarantee confirmation of isolation on the wire.
+  * Integrated Azure OpenAI (`gpt-4o-mini`) agent block generating briefs for SOC analysts.
 
 
 ## Simplified Logic App Flowchart
