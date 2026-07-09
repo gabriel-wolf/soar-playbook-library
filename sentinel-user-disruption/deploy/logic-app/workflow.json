@@ -4,7 +4,7 @@
     "parameters": {
         "logicAppName": {
             "type": "String",
-            "defaultValue": "AutoIsolate-Playbook",
+            "defaultValue": "UserContainment-Playbook",
             "metadata": {
                 "description": "The name of the Logic App / Playbook resource."
             }
@@ -13,7 +13,28 @@
             "type": "String",
             "defaultValue": "[resourceGroup().location]",
             "metadata": {
-                "description": "The Azure region where the playbook will be deployed."
+                "description": "Azure region where the playbook will be deployed."
+            }
+        },
+        "connections_azuresentinel_externalid": {
+            "type": "String",
+            "defaultValue": "[resourceId('Microsoft.Web/connections', 'azuresentinel')]",
+            "metadata": {
+                "description": "Full resource ID of the existing Microsoft Sentinel API connection."
+            }
+        },
+        "connections_office365_externalid": {
+            "type": "String",
+            "defaultValue": "[resourceId('Microsoft.Web/connections', 'office365')]",
+            "metadata": {
+                "description": "Full resource ID of the existing Office 365 API connection."
+            }
+        },
+        "connections_keyvault_externalid": {
+            "type": "String",
+            "defaultValue": "[resourceId('Microsoft.Web/connections', 'keyvault')]",
+            "metadata": {
+                "description": "Full resource ID of the existing Key Vault API connection."
             }
         },
         "itsmEmailRecipient": {
@@ -27,30 +48,128 @@
             "type": "String",
             "defaultValue": "soc@contoso.com",
             "metadata": {
-                "description": "Main email destination for standard SOC alerts."
+                "description": "Main SOC email destination for standard alerts."
             }
         },
         "executiveEmailRecipients": {
             "type": "String",
             "defaultValue": "soc@contoso.com,soc-manager@contoso.com,ciso@contoso.com",
             "metadata": {
-                "description": "Comma-separated list of recipients notified when a VIP account is targeted."
+                "description": "Comma-separated recipients notified when a VIP account is targeted."
+            }
+        },
+        "securityAlertsEmailRecipient": {
+            "type": "String",
+            "defaultValue": "security-alerts@contoso.com",
+            "metadata": {
+                "description": "Shared security-alerts mailbox used for CC and testing notifications."
+            }
+        },
+        "testItsmEmailRecipient": {
+            "type": "String",
+            "defaultValue": "itsm-test@contoso.com",
+            "metadata": {
+                "description": "Test destination used instead of the production ITSM mailbox."
+            }
+        },
+        "testSocEmailRecipient": {
+            "type": "String",
+            "defaultValue": "soc-test@contoso.com",
+            "metadata": {
+                "description": "Test destination used instead of the production SOC mailbox."
+            }
+        },
+        "identityApiBaseUrl": {
+            "type": "String",
+            "defaultValue": "https://api.contoso.com",
+            "metadata": {
+                "description": "Base URL for the identity-management API. Do not include a trailing slash."
+            }
+        },
+        "identityApiSecretName": {
+            "type": "String",
+            "defaultValue": "IdentityAPI",
+            "metadata": {
+                "description": "Key Vault secret name containing the identity API token."
+            }
+        },
+        "identityApiTestUsername": {
+            "type": "String",
+            "defaultValue": "testuser01",
+            "metadata": {
+                "description": "Test account used when DisableInProduction is disabled."
+            }
+        },
+        "disableInProduction": {
+            "type": "Bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "When true, the playbook calls the production disable API path. When false, the playbook uses the configured test username."
+            }
+        },
+        "sendProductionEmail": {
+            "type": "Bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "When true, sends production notifications. When false, sends testing notifications."
+            }
+        },
+        "disableMode": {
+            "type": "String",
+            "defaultValue": "Active",
+            "metadata": {
+                "description": "Display/status label included in testing emails."
+            }
+        },
+        "workdayTimezone": {
+            "type": "String",
+            "defaultValue": "Central Standard Time",
+            "metadata": {
+                "description": "Windows time-zone ID used for business-hour checks."
+            }
+        },
+        "businessHourStart": {
+            "type": "Int",
+            "defaultValue": 8,
+            "metadata": {
+                "description": "Start of business hours in 24-hour local time."
+            }
+        },
+        "businessHourEnd": {
+            "type": "Int",
+            "defaultValue": 20,
+            "metadata": {
+                "description": "End of business hours in 24-hour local time."
+            }
+        },
+        "vipDisableAlertKeyword1": {
+            "type": "String",
+            "defaultValue": "This Alert Title should Disable a VIP",
+            "metadata": {
+                "description": "Incident or alert title keyword that permits automated VIP disablement."
+            }
+        },
+        "vipDisableAlertKeyword2": {
+            "type": "String",
+            "defaultValue": "This Alert Title should Disable a VIP",
+            "metadata": {
+                "description": "Optional second incident or alert title keyword that permits automated VIP disablement."
             }
         }
     },
     "variables": {
         "connections": {
             "azuresentinel": {
-                "connectionId": "[resourceId('Microsoft.Web/connections', 'azuresentinel')]"
+                "connectionId": "[parameters('connections_azuresentinel_externalid')]"
             },
             "azuresentinel-1": {
-                "connectionId": "[resourceId('Microsoft.Web/connections', 'azuresentinel')]"
+                "connectionId": "[parameters('connections_azuresentinel_externalid')]"
             },
             "office365-2": {
-                "connectionId": "[resourceId('Microsoft.Web/connections', 'office365')]"
+                "connectionId": "[parameters('connections_office365_externalid')]"
             },
             "keyvault": {
-                "connectionId": "[resourceId('Microsoft.Web/connections', 'keyvault')]"
+                "connectionId": "[parameters('connections_keyvault_externalid')]"
             }
         }
     },
@@ -70,13 +189,37 @@
                         "value": "[variables('connections')]"
                     },
                     "DisableInProduction": {
-                        "value": true
+                        "value": "[parameters('disableInProduction')]"
                     },
                     "SendProductionEmail": {
-                        "value": true
+                        "value": "[parameters('sendProductionEmail')]"
                     },
                     "DISABLE": {
-                        "value": "Active"
+                        "value": "[parameters('disableMode')]"
+                    },
+                    "identityApiBaseUrl": {
+                        "value": "[parameters('identityApiBaseUrl')]"
+                    },
+                    "identityApiSecretName": {
+                        "value": "[parameters('identityApiSecretName')]"
+                    },
+                    "identityApiTestUsername": {
+                        "value": "[parameters('identityApiTestUsername')]"
+                    },
+                    "workdayTimezone": {
+                        "value": "[parameters('workdayTimezone')]"
+                    },
+                    "businessHourStart": {
+                        "value": "[parameters('businessHourStart')]"
+                    },
+                    "businessHourEnd": {
+                        "value": "[parameters('businessHourEnd')]"
+                    },
+                    "vipDisableAlertKeyword1": {
+                        "value": "[parameters('vipDisableAlertKeyword1')]"
+                    },
+                    "vipDisableAlertKeyword2": {
+                        "value": "[parameters('vipDisableAlertKeyword2')]"
                     }
                 },
                 "definition": {
@@ -93,6 +236,30 @@
                             "type": "Bool"
                         },
                         "DISABLE": {
+                            "type": "String"
+                        },
+                        "identityApiBaseUrl": {
+                            "type": "String"
+                        },
+                        "identityApiSecretName": {
+                            "type": "String"
+                        },
+                        "identityApiTestUsername": {
+                            "type": "String"
+                        },
+                        "workdayTimezone": {
+                            "type": "String"
+                        },
+                        "businessHourStart": {
+                            "type": "Int"
+                        },
+                        "businessHourEnd": {
+                            "type": "Int"
+                        },
+                        "vipDisableAlertKeyword1": {
+                            "type": "String"
+                        },
+                        "vipDisableAlertKeyword2": {
                             "type": "String"
                         }
                     },
@@ -277,7 +444,7 @@
                                                 "(ACTIVE)_Identity_Disable": {
                                                     "type": "Http",
                                                     "inputs": {
-                                                        "uri": "https://api.contoso.com/identity/user/@{body('Parse_On-Prem')?['onPremisesSamAccountName']}/Account",
+                                                        "uri": "@{concat(parameters('identityApiBaseUrl'), '/identity/user/', body('Parse_On-Prem')?['onPremisesSamAccountName'], '/Account')}",
                                                         "method": "PATCH",
                                                         "headers": {
                                                             "accept": "application/json",
@@ -332,7 +499,7 @@
                                                     "(TESTING)_Identity_Disable": {
                                                         "type": "Http",
                                                         "inputs": {
-                                                            "uri": "https://api.contoso.com/identity/user/testuser01/Account",
+                                                            "uri": "@{concat(parameters('identityApiBaseUrl'), '/identity/user/', parameters('identityApiTestUsername'), '/Account')}",
                                                             "method": "PATCH",
                                                             "headers": {
                                                                 "accept": "application/json",
@@ -376,9 +543,9 @@
                                                         "method": "post",
                                                         "body": {
                                                             "To": "[parameters('itsmEmailRecipient')]",
-                                                            "Subject": "Compromised Account – Identity Auto-Containment – Account Disabled",
+                                                            "Subject": "Compromised Account \u2013 Identity Auto-Containment \u2013 Account Disabled",
                                                             "Body": "<p class=\"editor-paragraph\">The following user account is at-risk or already compromised, based on an associated High Risk alert.<br><br>To protect the account holder and other critical organization resources, the account was disabled and the password was pre-expired. A request has automatically been sent to the IT Service Desk to assist the user with account recovery.<br><br>Affected user:<br>Name: @{concat(trim(last(split(outputs('Parse_User')?['body']?['displayName'], ','))), ' ', trim(first(split(outputs('Parse_User')?['body']?['displayName'], ','))))}<br>Email: @{items('For_Each_Account')['Account']}<br>Username: @{body('Parse_On-Prem')?['onPremisesSamAccountName']}<br><br>*This Security Incident was automatically created and closed as part of an Automated Incident Disruption playbook in Sentinel.</p>",
-                                                            "Cc": "security-alerts@contoso.com",
+                                                            "Cc": "[parameters('securityAlertsEmailRecipient')]",
                                                             "Importance": "High"
                                                         },
                                                         "path": "/v2/Mail"
@@ -398,8 +565,8 @@
                                                                 "body": {
                                                                     "To": "[parameters('executiveEmailRecipients')]",
                                                                     "Subject": "VIP Account Has Been Disabled",
-                                                                    "Body": "<p class=\"editor-paragraph\">Security Controls have automatically disabled the following VIP user account, following a High Risk security incident. The account was disabled because it was at High Risk or already compromised. Analysts will review the incident and relay additional information, if warranted.</p><p class=\"editor-paragraph\"><br><b><strong class=\"editor-text-bold\" style=\"color: rgb(208, 2, 27);\">Executive Recovery team – Please reach out to the user to initiate a prompt account recovery.</strong></b></p><p class=\"editor-paragraph\"><br><b><strong class=\"editor-text-bold\">User:</strong></b><br>Name: @{concat(trim(last(split(outputs('Parse_User')?['body']?['displayName'], ','))), ' ', trim(first(split(outputs('Parse_User')?['body']?['displayName'], ','))))}<br>Email: @{items('For_Each_Account')['Account']}<br>Username: @{body('Parse_On-Prem')?['onPremisesSamAccountName']}<br><br><b><strong class=\"editor-text-bold\">Position Title:</strong></b><br>@{coalesce(body('Parse_User')?['jobTitle'], 'No Position Title')}<br><br><b><strong class=\"editor-text-bold\">Reason:</strong></b><br>@{outputs('Compose_Incident_URL')}<br><br><b><strong class=\"editor-text-bold\">Actions Taken:</strong></b><br>Account Disabled<br>Password Pre-Expired<br>Incident Ticket created/closed in ITSM Tool<br>Account Recovery Tasks sent to Service Desk<br><br><b><strong class=\"editor-text-bold\" style=\"color: rgb(236, 1, 30);\">SOC Analyst Actions Needed:</strong></b><br><span style=\"color: rgb(236, 1, 30);\">Review the referenced Incident / Alert</span><br><span style=\"color: rgb(236, 1, 30);\">Complete remediation</span><br><span style=\"color: rgb(236, 1, 30);\">Update/Close Incident in Defender</span></p>",
-                                                                    "Cc": "security-alerts@contoso.com",
+                                                                    "Body": "<p class=\"editor-paragraph\">Security Controls have automatically disabled the following VIP user account, following a High Risk security incident. The account was disabled because it was at High Risk or already compromised. Analysts will review the incident and relay additional information, if warranted.</p><p class=\"editor-paragraph\"><br><b><strong class=\"editor-text-bold\" style=\"color: rgb(208, 2, 27);\">Executive Recovery team \u2013 Please reach out to the user to initiate a prompt account recovery.</strong></b></p><p class=\"editor-paragraph\"><br><b><strong class=\"editor-text-bold\">User:</strong></b><br>Name: @{concat(trim(last(split(outputs('Parse_User')?['body']?['displayName'], ','))), ' ', trim(first(split(outputs('Parse_User')?['body']?['displayName'], ','))))}<br>Email: @{items('For_Each_Account')['Account']}<br>Username: @{body('Parse_On-Prem')?['onPremisesSamAccountName']}<br><br><b><strong class=\"editor-text-bold\">Position Title:</strong></b><br>@{coalesce(body('Parse_User')?['jobTitle'], 'No Position Title')}<br><br><b><strong class=\"editor-text-bold\">Reason:</strong></b><br>@{outputs('Compose_Incident_URL')}<br><br><b><strong class=\"editor-text-bold\">Actions Taken:</strong></b><br>Account Disabled<br>Password Pre-Expired<br>Incident Ticket created/closed in ITSM Tool<br>Account Recovery Tasks sent to Service Desk<br><br><b><strong class=\"editor-text-bold\" style=\"color: rgb(236, 1, 30);\">SOC Analyst Actions Needed:</strong></b><br><span style=\"color: rgb(236, 1, 30);\">Review the referenced Incident / Alert</span><br><span style=\"color: rgb(236, 1, 30);\">Complete remediation</span><br><span style=\"color: rgb(236, 1, 30);\">Update/Close Incident in Defender</span></p>",
+                                                                    "Cc": "[parameters('securityAlertsEmailRecipient')]",
                                                                     "Importance": "High"
                                                                 },
                                                                 "path": "/v2/Mail"
@@ -426,7 +593,7 @@
                                                                         "To": "[parameters('socEmailRecipient')]",
                                                                         "Subject": "Account Disabled by Auto-Containment Automation",
                                                                         "Body": "<p class=\"editor-paragraph\">Microsoft Security Controls have determined the following user account is at-risk or already compromised:<br><br><b><strong class=\"editor-text-bold\">User:</strong></b><br>Name: @{concat(trim(last(split(outputs('Parse_User')?['body']?['displayName'], ','))), ' ', trim(first(split(outputs('Parse_User')?['body']?['displayName'], ','))))}<br>Email: @{items('For_Each_Account')['Account']}<br>Username: @{body('Parse_On-Prem')?['onPremisesSamAccountName']}<br><br><b><strong class=\"editor-text-bold\">Position Title:</strong></b><br>@{coalesce(body('Parse_User')?['jobTitle'], 'No Position Title')}<br><br><b><strong class=\"editor-text-bold\">Reason:</strong></b><br>@{outputs('Compose_Incident_URL')}<br><br><b><strong class=\"editor-text-bold\">Actions Taken:</strong></b><br>Account Disabled<br>Password Pre-Expired<br>Ticket created/closed in ITSM tool<br>Account Recovery Tasks sent to Service Desk<br><br><b><strong class=\"editor-text-bold\" style=\"color: rgb(236, 1, 30);\">Analyst Actions Needed:</strong></b><br><span style=\"color: rgb(236, 1, 30);\">Review the referenced Incident / Alert</span><br><span style=\"color: rgb(236, 1, 30);\">Complete remediation</span><br><span style=\"color: rgb(236, 1, 30);\">Update/Close Incident in Defender</span></p><br>",
-                                                                        "Cc": "security-alerts@contoso.com",
+                                                                        "Cc": "[parameters('securityAlertsEmailRecipient')]",
                                                                         "Importance": "High"
                                                                     },
                                                                     "path": "/v2/Mail"
@@ -464,10 +631,10 @@
                                                             },
                                                             "method": "post",
                                                             "body": {
-                                                                "To": "itsm-test@contoso.com",
-                                                                "Subject": "Compromised Account – Automated Playbook Test",
+                                                                "To": "[parameters('testItsmEmailRecipient')]",
+                                                                "Subject": "Compromised Account \u2013 Automated Playbook Test",
                                                                 "Body": "<p class=\"editor-paragraph\">The following user account is at-risk or already compromised, based on an associated High Risk alert.<br><br>To protect the account holder and other critical information resources, the account was disabled and the password was pre-expired. A request has automatically been sent to the Service Desk to assist the user with account recovery.<br><br>Affected user:<br>Name: @{concat(trim(last(split(outputs('Parse_User')?['body']?['displayName'], ','))), ' ', trim(first(split(outputs('Parse_User')?['body']?['displayName'], ','))))}<br>Email: @{items('For_Each_Account')['Account']}<br>Username: @{body('Parse_On-Prem')?['onPremisesSamAccountName']}<br><br>*This Security Incident was automatically created and closed as part of an Auto Containment automation test in Sentinel.</p>",
-                                                                "Cc": "security-alerts@contoso.com",
+                                                                "Cc": "[parameters('securityAlertsEmailRecipient')]",
                                                                 "Importance": "High"
                                                             },
                                                             "path": "/v2/Mail"
@@ -488,7 +655,7 @@
                                                             },
                                                             "method": "post",
                                                             "body": {
-                                                                "To": "security-alerts@contoso.com",
+                                                                "To": "[parameters('testSocEmailRecipient')]",
                                                                 "Subject": "(TEST MODE) Account Disabled by Auto-Containment Playbook",
                                                                 "Body": "<p class=\"editor-paragraph\">Microsoft Security Controls have determined the following user account is at-risk or already compromised:<br><br><b><strong class=\"editor-text-bold\">User:</strong></b><br>Name: @{concat(trim(last(split(outputs('Parse_User')?['body']?['displayName'], ','))), ' ', trim(first(split(outputs('Parse_User')?['body']?['displayName'], ','))))}<br>Email: @{items('For_Each_Account')['Account']}<br>Username: @{body('Parse_On-Prem')?['onPremisesSamAccountName']}<br><br><b><strong class=\"editor-text-bold\">Position Title:</strong></b><br>@{coalesce(body('Parse_User')?['jobTitle'], 'No Position Title')}<br><br><b><strong class=\"editor-text-bold\">Reason:</strong></b><br>@{outputs('Compose_Incident_URL')}<br><br><b><strong class=\"editor-text-bold\">Actions Taken:</strong></b><br>Account Disabled<br>Password Pre-Expired<br>Ticket created/closed in ITSM tool<br>Account Recovery Tasks sent to Service Desk<br><br><b><strong class=\"editor-text-bold\">Analyst Actions Needed:</strong></b><br>Review the referenced Incident / Alert<br>Complete remediation<br>Update/Close Incident in Defender.<br><br><br><i><em class=\"editor-text-italic\">[Disable Status: </em></i>@{parameters('DISABLE')}<i><em class=\"editor-text-italic\">]</em></i></p>",
                                                                 "Importance": "High"
@@ -519,7 +686,7 @@
                                                     }
                                                 },
                                                 "method": "get",
-                                                "path": "/secrets/@{encodeURIComponent('IdentityAPI')}/value"
+                                                "path": "/secrets/@{encodeURIComponent(parameters('identityApiSecretName'))}/value"
                                             },
                                             "runtimeConfiguration": {
                                                 "secureData": {
@@ -553,7 +720,7 @@
                                                                 "To": "[parameters('executiveEmailRecipients')]",
                                                                 "Subject": "VIP Account At Risk",
                                                                 "Body": "<p class=\"editor-paragraph\">Microsoft Security Controls have determined the following Executive account is at-risk or already compromised. <b><strong class=\"editor-text-bold\">Automation has not disabled the account</strong></b>, <i><em class=\"editor-text-italic\">so that Support may provide VIP hands-on assistance</em></i>. Please let the Tier 3 team know if we need to assist with re-securing the account. <br><br><b><strong class=\"editor-text-bold\">User:</strong></b><br>Name: @{concat(trim(last(split(outputs('Parse_User')?['body']?['displayName'], ','))), ' ', trim(first(split(outputs('Parse_User')?['body']?['displayName'], ','))))}<br>Email: @{items('For_Each_Account')['Account']}<br>Username: @{body('Parse_On-Prem')?['onPremisesSamAccountName']}<br><br><b><strong class=\"editor-text-bold\">Position Title:</strong></b><br>@{coalesce(body('Parse_User')?['jobTitle'], 'No Position Title')}<br><br><b><strong class=\"editor-text-bold\">Reason:</strong></b><br>@{outputs('Compose_Incident_URL')}</p>",
-                                                                "Cc": "security-alerts@contoso.com",
+                                                                "Cc": "[parameters('securityAlertsEmailRecipient')]",
                                                                 "Importance": "High"
                                                             },
                                                             "path": "/v2/Mail"
@@ -572,7 +739,7 @@
                                                                 },
                                                                 "method": "post",
                                                                 "body": {
-                                                                    "To": "security-alerts@contoso.com",
+                                                                    "To": "[parameters('testSocEmailRecipient')]",
                                                                     "Subject": "(TEST MODE) VIP Account NOT Disabled by Automation Playbook",
                                                                     "Body": "<p class=\"editor-paragraph\">Microsoft Security Controls have determined the following user account is at-risk or already compromised:<br><br><b><strong class=\"editor-text-bold\">User:</strong></b><br>Name: @{concat(trim(last(split(outputs('Parse_User')?['body']?['displayName'], ','))), ' ', trim(first(split(outputs('Parse_User')?['body']?['displayName'], ','))))}<br>Email: @{items('For_Each_Account')['Account']}<br>Username: @{body('Parse_On-Prem')?['onPremisesSamAccountName']}<br><br><b><strong class=\"editor-text-bold\">Position Title:</strong></b><br>@{coalesce(body('Parse_User')?['jobTitle'], 'No Position Title')}<br><br><b><strong class=\"editor-text-bold\">Reason:</strong></b><br>@{outputs('Compose_Incident_URL')}</p>",
                                                                     "Importance": "High"
@@ -603,19 +770,19 @@
                                                     {
                                                         "contains": [
                                                             "@items('For_Each_Account')['Alert']",
-                                                            "This Alert Title should Disable a VIP"
+                                                            "@parameters('vipDisableAlertKeyword1')"
                                                         ]
                                                     },
                                                     {
                                                         "contains": [
                                                             "@items('For_Each_Account')['Alert']",
-                                                            "This Alert Title should Disable a VIP"
+                                                            "@parameters('vipDisableAlertKeyword2')"
                                                         ]
                                                     },
                                                     {
                                                         "contains": [
                                                             "@triggerBody()?['object']?['properties']?['title']",
-                                                            "This Alert Title should Disable a VIP"
+                                                            "@parameters('vipDisableAlertKeyword1')"
                                                         ]
                                                     },
                                                     {
@@ -671,7 +838,7 @@
                                         "and": [
                                             {
                                                 "equals": [
-                                                    "@and(greaterOrEquals(int(convertFromUtc(utcNow(), 'Central Standard Time', 'HH')), 8), less(int(convertFromUtc(utcNow(), 'Central Standard Time', 'HH')), 20))",
+                                                    "@and(greaterOrEquals(int(convertFromUtc(utcNow(), parameters('workdayTimezone'), 'HH')), parameters('businessHourStart')), less(int(convertFromUtc(utcNow(), parameters('workdayTimezone'), 'HH')), parameters('businessHourEnd')))",
                                                     true
                                                 ]
                                             }
@@ -751,5 +918,6 @@
                 }
             }
         }
-    ]
+    ],
+    "metadata": {}
 }
