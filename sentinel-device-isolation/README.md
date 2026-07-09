@@ -19,7 +19,6 @@ An advanced Azure Logic App playbook that automatically isolates compromised dev
 * [`deploy/automation-rules/sentinel-on-creation.json`](deploy/automation-rules/sentinel-on-creation.json) fires on incident creation when the title matches configured trigger keywords.
 * [`deploy/automation-rules/sentinel-on-update.json`](deploy/automation-rules/sentinel-on-update.json) fires on incident update when new alerts are added and the title matches configured trigger keywords.
 * [`deploy/logic-app/workflow.json`](deploy/logic-app/workflow.json) is the deployable ARM template for the Logic App workflow.
-* The Logic App itself exposes a Microsoft Sentinel incident webhook trigger using the `/incident-creation` path.
 
 ## Simplified Logic App Flowchart
 
