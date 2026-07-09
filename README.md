@@ -5,6 +5,10 @@ A collection of production-grade, context-aware Security Orchestration, Automati
 > [!IMPORTANT]
 > These are production-grade playbooks I created (and sanitized). They are actively utilized by a large-scale enterprise with over 100,000 users and endpoints. Because they were engineered for a specific organization, they will need to be modified to meet your company's specific business attributes.
 
+> [!WARNING]
+> These templates are provided as anonymized reference implementations, not one-click marketplace-style deployments. They are based on working Microsoft Sentinel / Logic Apps automation currently used in a large enterprise environment, but they depend on tenant-specific resources that cannot be safely or reliably exported into a public repository.
+> The goal of this repository is to share the architecture, workflow logic, and implementation patterns behind the automation—not to provide a guaranteed plug-and-play deployment for every Azure environment.
+
 ---
 
 # 1. [Autonomous Device Isolation](./sentinel-device-isolation/)
