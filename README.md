@@ -3,7 +3,7 @@
 A collection of production-grade, context-aware Security Orchestration, Automation, and Response (SOAR) playbooks built using Azure Logic Apps and integrated with Microsoft Sentinel and Microsoft Defender for Endpoint (MDE). 
 
 > [!IMPORTANT]
-> These are production-grade playbooks I created (and sanitized). They are actively utilized by a large-scale enterprise with over 100,000 users and endpoints. Because they were engineered for a specific organization, they will need to be modified to meet your company's specific business attributes.
+> These are production-grade playbooks I created (and sanitized). They are actively utilized by a large-scale enterprise with 100,000+ users and endpoints. Because they were engineered for a specific organization, they will need to be modified to meet your company's specific business attributes.
 
 > [!WARNING]
 > These templates are provided as anonymized reference implementations, not one-click marketplace-style deployments. They are based on working Microsoft Sentinel / Logic Apps automation currently used in a large enterprise environment, but they depend on tenant-specific resources that cannot be safely or reliably exported into a public repository.
