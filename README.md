@@ -17,7 +17,7 @@ A collection of production-grade, context-aware Security Orchestration, Automati
   * Pre-containment state evaluation checking to prevent unnecessary disruptions.
   * Automatic system classification loops separating standard workstations from mission-critical servers.
   * An asynchronous verification engine polling the MDE machine actions API every 60 seconds to guarantee confirmation of isolation.
-  * Integrated Azure OpenAI (`gpt-4o-mini`) agent block generating briefs for SOC analysts.
+  * Integrated Azure OpenAI (`gpt-4o-mini`) agent block generating briefs for SOC analysts with Enterprise Data Protection (EDP).
 
 
 ## Simplified Logic App Flowchart
