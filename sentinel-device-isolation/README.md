@@ -7,7 +7,7 @@ An advanced Azure Logic App playbook that automatically isolates compromised dev
 * Triggers from Microsoft Sentinel automation rules that invoke the Logic App incident webhook.
 * Retrieves device and alert evidence from Microsoft Graph and Defender for Endpoint.
 * Identifies active remediation events and active device entities.
-* Uses an Azure OpenAI agent (`gpt-4o-mini`) to generate concise pre-isolation summaries.
+* Uses an Azure OpenAI agent (`gpt-4o-mini`) to generate concise pre-isolation summaries with Enterprise Data Protection (EDP).
 * Applies conditional network isolation with server/workstation and after-hours guardrails.
 * Confirms isolation completion through Microsoft Defender for Endpoint machine action polling.
 * Sends SOC notification emails based on isolation outcome, asset classification, and control settings.
