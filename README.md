@@ -1,4 +1,4 @@
-# Enterprise SOAR Playbooks: Automated Device & User Response
+# Enterprise SOAR Playbooks: Automated Incident Response
 
 A collection of production-grade, context-aware Security Orchestration, Automation, and Response (SOAR) playbooks built using Azure Logic Apps and integrated with Microsoft Sentinel and Microsoft Defender for Endpoint (MDE). 
 
