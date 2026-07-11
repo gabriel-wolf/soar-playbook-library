@@ -1,4 +1,4 @@
-# Cloud-Native Enterprise SOAR Device and User Containment
+# Enterprise SOAR Playbooks: Automated Device & User Containment
 
 A collection of production-grade, context-aware Security Orchestration, Automation, and Response (SOAR) playbooks built using Azure Logic Apps and integrated with Microsoft Sentinel and Microsoft Defender for Endpoint (MDE). 
 
