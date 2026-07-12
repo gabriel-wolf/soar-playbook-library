@@ -11,7 +11,7 @@ A collection of production-grade, context-aware Security Orchestration, Automati
 
 ---
 
-# 1. [Automaed Device Isolation](./sentinel-device-isolation/)
+# 1. [Automated Device Isolation](./sentinel-device-isolation/)
 * **Primary Function:** Automated endpoint containment utilizing the Microsoft Defender for Endpoint (MDE) API.
 * **Key Features:**
   * Pre-containment state evaluation checking to prevent unnecessary disruptions.
@@ -121,7 +121,7 @@ flowchart TD
     IsolateSuccessful -->|No| IsolationFailed[Log Failure Details to Audit History]
    ```
 
-# 2. [Automaed User Containment](./sentinel-user-disruption/)
+# 2. [Automated User Containment](./sentinel-user-disruption/)
 * **Primary Function:** Automated user profile lookup via Microsoft Graph and identity containment via a custom corporate Identity API.
 * **Key Features:**
   * Dynamic active-hours logic parsing (for SOC on-call).
