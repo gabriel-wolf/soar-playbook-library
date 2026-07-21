@@ -29,15 +29,6 @@ A collection of production-grade, context-aware Security Orchestration, Automati
     
 ---
 
-## Design Principles & Core Standards
-
-Every blueprint in this framework is designed under the following engineering principles:
-* **Least Privilege Identity Management:** All cloud tasks are scoped strictly around Azure Managed Service Identities (MSI) or tight Service Principal OAuth tokens, eliminating hardcoded long-lived secrets.
-* **Blast Radius Containment:** Workflows include explicit testing and simulation parameters (such as `DisableInProduction` and `SendProductionEmail`) to support safe integration testing and mock execution branches in non-production landing zones.
-* **Analyst-First Design:** Automation shouldn't hide data. Every playbook terminates by outputting a highly visual, HTML-formatted data card straight to priority SOC analyst communication streams, summarizing the action taken, current isolation tracking status, and direct-to-portal incident hyperlinks.
-
----
-
 
 ## Getting Started & Validation
 
