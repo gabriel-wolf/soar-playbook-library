@@ -101,7 +101,7 @@ When the playbook runs, it generates contextual incident notifications that incl
 - ITSM ticket creation and account recovery guidance
 - Escalation instructions for VIP accounts
 
-![SOC Email Notification](../imgs/soc-email-notification.png)
+![SOC Email Notification](../imgs/soc-email-notification2.png)
 ## Required Connections and Permissions
 
 ### Azure Logic App API Connections
